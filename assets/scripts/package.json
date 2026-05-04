@@ -1,0 +1,16 @@
+{
+  "name": "wingman_app",
+  "version": "0.0.0",
+  "wingman_version": "0.0.0",
+  "entry": "main.wren",
+  "window": {
+    "width": 1280,
+    "height": 720,
+    "title": "My Game"
+  },
+  "modules": {
+    "shapes": "http://localhost:3000/scripts/shapes.wren",
+    "gfx": "http://localhost:3000/scripts/gfx.wren",
+    "vector": "http://localhost:3000/scripts/vector.wren"
+  }
+}
