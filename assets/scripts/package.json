@@ -11,6 +11,8 @@
   "modules": {
     "shapes": "http://localhost:3000/scripts/shapes.wren",
     "gfx": "http://localhost:3000/scripts/gfx.wren",
-    "vector": "http://localhost:3000/scripts/vector.wren"
+    "input": "http://localhost:3000/scripts/input.wren",
+    "vector": "http://localhost:3000/scripts/vector.wren",
+    "collision": "http://localhost:3000/scripts/collision.wren"
   }
 }
