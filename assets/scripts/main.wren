@@ -4,8 +4,8 @@ import "vector" for Vec2
 import "collision" for Collision2D
 import "input" for Mouse, MouseButton, Keyboard, Key
 
-var GRID_SIZE = 8
-var TILE_SIZE = 32
+var GRID_SIZE = 1
+var TILE_SIZE = 64
 
 var GRID_OFFSET_X = 500
 var GRID_OFFSET_Y = 200
@@ -295,6 +295,8 @@ var BulletMS = Texture2D.fromUri("http://localhost:3000/textures/bullet/bullet_m
 var Mountain = Texture2D.fromUri("http://localhost:3000/textures/environment/mountain64px.png")
 var Olaf = Texture2D.fromUri("http://localhost:3000/textures/olaf.png")
 
+var LoremPicsum = Texture2D.fromUri("https://picsum.photos/64")
+
 class Main {
   construct init() {
     _time = 0
@@ -384,10 +386,17 @@ class Main {
       var y = GRID_OFFSET_Y + ((tile.x + tile.y) * TILE_SIZE/2) + TILE_SIZE
 
       Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, tile.texture)
-      if (Collision2D.pointInRect(pointer, x, y, TILE_SIZE * 1.5, TILE_SIZE)) {
+
+      var v1 = Vec2.new(x + (TILE_SIZE), y) // top vertex
+      var v2 = Vec2.new(x + (TILE_SIZE), y + (TILE_SIZE)) // center vertex
+      var v3 = Vec2.new(x, y + (TILE_SIZE/2)) // left vertex
+      var v4 = Vec2.new(x + (TILE_SIZE * 2), y + (TILE_SIZE/2)) // right vertex
+
+      if (Vec2.pointInQuad(pointer.x, pointer.y, v1, v2, v3, v4)) {
         if (Mouse.isJustPressed(MouseButton.LEFT)) {
           tile.triggerClick()
         }
+        Draw.texturedQuad(x,y, TILE_SIZE,TILE_SIZE, LoremPicsum)
       }
     }
 
@@ -401,7 +410,12 @@ class Main {
         var x = GRID_OFFSET_X + (_greenTiles[i].x - _greenTiles[i].y) * TILE_SIZE
         var y = GRID_OFFSET_Y + (_greenTiles[i].x + _greenTiles[i].y) * TILE_SIZE/2
 
-        if (Collision2D.pointInRect(pointer, x, y, TILE_SIZE, TILE_SIZE)) {
+        var v1 = Vec2.new(x + (TILE_SIZE), y) // top vertex
+        var v2 = Vec2.new(x + (TILE_SIZE), y + (TILE_SIZE)) // center vertex
+        var v3 = Vec2.new(x, y + (TILE_SIZE/2)) // left vertex
+        var v4 = Vec2.new(x + (TILE_SIZE * 2), y + (TILE_SIZE/2)) // right vertex
+
+        if (Vec2.pointInQuad(pointer.x, pointer.y, v1, v2, v3, v4)) {
           if (Mouse.isJustPressed(MouseButton.LEFT)) {
             unit.vec2 = Vec2.new(_greenTiles[i].x,_greenTiles[i].y)
             _selectedUnit = null
@@ -419,7 +433,12 @@ class Main {
       var x = GRID_OFFSET_X + (unit.x - unit.y) * TILE_SIZE
       var y = GRID_OFFSET_Y + (unit.x + unit.y) * TILE_SIZE/2 - TILE_SIZE
 
-      if (Collision2D.pointInRect(pointer, x, y, unit.width, unit.height)) {
+      var v1 = Vec2.new(x + (TILE_SIZE), y)
+      var v2 = Vec2.new(x + (TILE_SIZE), y + (TILE_SIZE))
+      var v3 = Vec2.new(x, y + (TILE_SIZE/2))
+      var v4 = Vec2.new(x + (TILE_SIZE * 2), y + (TILE_SIZE/2))
+
+      if (Vec2.pointInQuad(pointer.x, pointer.y, v1, v2, v3, v4)) {
         Draw.texturedQuad( x - 3, y - 3 , unit.width + 3, unit.height + 3, unit.texture)
         
         if (Mouse.isJustPressed(MouseButton.LEFT) && _selectedUnit == null) {

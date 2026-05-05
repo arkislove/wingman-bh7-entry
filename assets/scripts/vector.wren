@@ -31,4 +31,24 @@ class Vec2 {
     }
 
     toString { "(%(_x), %(_y))" }
+
+    static sign(px, py, ax, ay, bx, by) {
+        return (px - bx) * (ay - by) - (ax - bx) * (py - by)
+    }
+
+    static pointInTriangle(px, py, ax, ay, bx, by, cx, cy) {
+        var d1 = sign(px, py, ax, ay, bx, by)
+        var d2 = sign(px, py, bx, by, cx, cy)
+        var d3 = sign(px, py, cx, cy, ax, ay)
+
+        var hasNeg = (d1 < 0) || (d2 < 0) || (d3 < 0)
+        var hasPos = (d1 > 0) || (d2 > 0) || (d3 > 0)
+
+        return !(hasNeg && hasPos)
+    }
+
+    static pointInQuad(px, py, v1, v2, v3, v4) {
+        return pointInTriangle(px, py, v1.x, v1.y, v2.x, v2.y, v3.x, v3.y) ||
+            pointInTriangle(px, py, v1.x, v1.y, v3.x, v3.y, v4.x, v4.y)
+    }
 }
