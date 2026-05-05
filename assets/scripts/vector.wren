@@ -1,4 +1,4 @@
-class Vector2D {
+class Vec2 {
     construct new(x, y) {
         _x = x
         _y = y
@@ -9,10 +9,11 @@ class Vector2D {
     x { _x }
     y { _y }
 
-    +(v) { Vector2D.new(_x + v.x, _y + v.y) }
-    -(v) { Vector2D.new(_x - v.x, _y - v.y) }
-    *(s) { Vector2D.new(_x * s,   _y * s) }
-    /(s) { Vector2D.new(_x / s,   _y / s) }
+    +(v) { Vec2.new(_x + v.x, _y + v.y) }
+    -(v) { Vec2.new(_x - v.x, _y - v.y) }
+    *(s) { Vec2.new(_x * s,   _y * s) }
+    /(s) { Vec2.new(_x / s,   _y / s) }
+    ==(other) { _x == other.x && _y == other.y}
 
     magnitude {
         return ( _x * _x + _y * _y).sqrt
@@ -27,7 +28,7 @@ class Vector2D {
         }
 
         return current + (toVector  / dist) * maxDistanceDelta
-    }    
+    }
 
     toString { "(%(_x), %(_y))" }
 }
