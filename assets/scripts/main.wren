@@ -1,24 +1,82 @@
 import "shapes" for Draw
 import "gfx" for Texture2D
-import "vector" for Vector2D
+import "vector" for Vec2
+import "collision" for Collision2D
+import "input" for Mouse, MouseButton, Keyboard, Key
 
 var GRID_SIZE = 8
-var TILE_SIZE = 64
+var TILE_SIZE = 32
+
+var GRID_OFFSET_X = 500
+var GRID_OFFSET_Y = 200
 
 var CENTER_X = 1280 / 2
 var CENTER_Y = 720 / 2
 
 class Tile {
-  id { _id }
-  x { _x }
-  y { _y }
-  color { _color }
-
-  construct new(id, x, y, color) {
+  construct new(id, x, y, texture) {
     _id = id
     _x = x
     _y = y
-    _color = color
+    _texture = texture
+  }
+
+  id { _id }
+  x { _x }
+  y { _y }
+  texture { _texture }
+
+  onClick(value) { _onClick = value }
+  onHover(value) { _onHover = value }
+
+  triggerClick( ){
+    if (_onClick != null) {
+      _onClick.call(this)
+    }
+  }
+
+  triggerHover() {
+    if (_onHover != null) {
+      _onHover.call(this)
+    }
+  }
+
+  static isCorner(x,y) {  
+    return (x < 0) || (y < 0) || (x > GRID_SIZE - 1) || (y > GRID_SIZE - 1)
+  }
+
+  static getReachable(startX, startY, speed) {
+    var queue = [[startX, startY, 0]]
+    var visited = {}
+    var reachable = []
+
+    while (queue.count > 0) {
+        var node = queue.removeAt(0)
+        var x = node[0]
+        var y = node[1]
+        var cost = node[2]
+
+        var key = "%(x),%(y)"
+
+        if (isCorner(x-1,y-1)) continue
+        if (visited.containsKey(key)) continue
+        visited[key] = true
+
+        if (cost > speed) continue
+
+        reachable.add(Vec2.new(x, y))
+
+        var dirs = [[1,0], [-1,0], [0,1], [0,-1]]
+
+        for (d in dirs) {
+          var nx = x + d[0]
+          var ny = y + d[1]
+
+          queue.add([nx, ny, cost + 1])
+        }
+    }
+
+    return reachable
   }
 }
 
@@ -162,65 +220,223 @@ class UI {
   }
 }
 
-class Ball {
-  vec2 { _vec2 }
-  
-  construct new(vec2) {
-    _vec2 = vec2
+class Unit {
+  construct new(id, x,y, w, h, texture) {
+    _id = id
+    _x = x
+    _y = y
+    _width = w
+    _height = h
+    _texture = texture
+  }
+
+  id { _id }
+  x { _x }
+  y { _y }
+  width { _width }
+  height { _height }
+  texture { _texture }
+  speed { 3 } // temporarily set for testing
+
+  vec2 {
+    return Vec2.new(_x, _y)
+  }
+
+  vec2=(value) {
+    _x = value.x
+    _y = value.y
   }
 }
 
-var SnowTile = Texture2D.fromUri("http://localhost:3000/textures/snow_tile.png")
+class Ball {
+  construct new(x,y,r) {
+    _x = x
+    _y = y
+    _radius = r
+  }
 
+  x { _x }
+  y { _y }
+  radius { _radius }
+
+  movement { _movement }
+  
+  movement=(value) {
+    _movement = value
+  }
+
+  vec2 {
+    return Vec2.new(_x, _y)
+  }
+
+  vec2=(value) {
+    _x = value.x
+    _y = value.y
+  }
+}
+
+var SnowTileBase = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_base.png")
+var SnowTileLand = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_land.png")
+var SnowTileBottomLeft = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_bottom_left.png")
+var SnowTileBottomSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_bottom_side.png")
+var SnowTileLeftSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_left_side.png")
+var SnowTileRightBottomCorner = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_right_bottom_corner.png")
+var SnowTileRightSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_right_side.png")
+var SnowTileUpperLeftCorner = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_upper_left_corner.png")
+var SnowTileUpperSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_upper_side.png")
+var SnowTileRightCorner = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_top_right_corner.png")
+
+var GreenTile = Texture2D.fromUri("http://localhost:3000/textures/tiles/green_tile.png")
+var RedTile = Texture2D.fromUri("http://localhost:3000/textures/tiles/red_tile.png")
+
+var Bullet = Texture2D.fromUri("http://localhost:3000/textures/bullet/bullet.png")
+var BulletMS = Texture2D.fromUri("http://localhost:3000/textures/bullet/bullet_ms.png")
+
+var Mountain = Texture2D.fromUri("http://localhost:3000/textures/environment/mountain64px.png")
+var Olaf = Texture2D.fromUri("http://localhost:3000/textures/olaf.png")
 
 class Main {
   construct init() {
     _time = 0
 
+    _demoLevel = []
+    
+    // grid tiles are the base
     _grid = []
+
+    // units
+    _units = []
+
+    // movement tiles
+    // green = unit possible tiles
+    // red = enemy "threat" tiles
+    _greenTiles = []
+    _redTiles = []
+
     _balls = []
 
-    var startingX = 4 
+    var startingX = 4
     var startingY = 4
+
+    var addDefaultTile = Fn.new {|id, x, y|
+      var tile = Tile.new(id, x, y, SnowTileLand)
+      var onClick = Fn.new {
+        System.print("Tile #%(id): [%(x),%(y)]")
+      }
+      tile.onClick(onClick)
+      var onHover = Fn.new {
+        Draw.texturedQuad(x, y - 10, TILE_SIZE, TILE_SIZE, tile.texture)
+      }
+      tile.onHover(onHover)
+      _grid.add(tile)
+    }
 
     for (i in 0..GRID_SIZE-1) {
       for (j in 0..GRID_SIZE-1) {
-        var id = i + j
-        
-        var isoX = (i - j) * (TILE_SIZE)
-        var isoY = (i + j) * (TILE_SIZE/2)
-        var x = 500 + isoX
-        var y = 300 + isoY
-        var tile = Tile.new(id, x, y, 0xFFFFFFFF)
-        _grid.add(tile)
+        var id = (i * GRID_SIZE) + j
 
-        if (i == 3 && j == 3) {
-          startingX = tile.x
-          startingY = tile.y
+        var x = i
+        var y = j
+
+        if (i == 4 && j == 4) {
+          startingX = x
+          startingY = y
+        }
+
+        var tile = null
+
+        if (id < _demoLevel.count){
+          tile = Tile.new(id, x, y, _demoLevel[id])
+
+          var onClick = Fn.new {
+            System.print("Tile #%(id): [%(x),%(y)]")
+          }
+          tile.onClick(onClick)
+          var onHover = Fn.new {
+            Draw.texturedQuad(x, y - 5  , TILE_SIZE, TILE_SIZE, tile.texture)
+          }
+          tile.onHover(onHover)
+          _grid.add(tile)
+        } else {
+          addDefaultTile.call(id,x,y)
         }
       }
     }
 
-    _ball = Vector2D.new(300,300)
-    _target = Vector2D.new(700,700)
+    _olaf = Unit.new(1, startingX , startingY, TILE_SIZE, TILE_SIZE, Olaf)
+    _units.add(_olaf)
 
+    _selectedUnit = null
   }
 
   frame(dt) {
     _time = _time + dt * 0.5
 
-    // // draw tiles
-    // for (i in 0.._grid.count-1) {
-    //   var tile = _grid[i]
-    //   Draw.texturedQuad(tile.x, tile.y, TILE_SIZE, TILE_SIZE, SnowTile  )
-    // }
+    var pointer = Vec2.new(Mouse.x(), Mouse.y())
 
-    Draw.circle(_ball.x, _ball.y, TILE_SIZE/2, 0xFF0000FF)
-    if (_time > 3) {
-      _ball = Vector2D.moveTowards(_ball, _target, 2)  
+
+    // FOR ALL GRID OBJECTS: always add GRID_OFFSET_X and GRID_OFFSET_Y to x and y
+    // draw grid
+    for (i in 0.._grid.count-1) {
+      var tile = _grid[i]
+
+      var x = GRID_OFFSET_X + ((tile.x - tile.y) * TILE_SIZE)
+      var y = GRID_OFFSET_Y + ((tile.x + tile.y) * TILE_SIZE/2) + TILE_SIZE
+
+      Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, tile.texture)
+      if (Collision2D.pointInRect(pointer, x, y, TILE_SIZE * 1.5, TILE_SIZE)) {
+        if (Mouse.isJustPressed(MouseButton.LEFT)) {
+          tile.triggerClick()
+        }
+      }
     }
 
+    if (_selectedUnit != null) {
+      var unit = _selectedUnit
 
+      Draw.texturedQuad(0,600, 128,128, unit.texture)
 
+      // draw available tiles
+      for (i in 0.._greenTiles.count-1) {
+        var x = GRID_OFFSET_X + (_greenTiles[i].x - _greenTiles[i].y) * TILE_SIZE
+        var y = GRID_OFFSET_Y + (_greenTiles[i].x + _greenTiles[i].y) * TILE_SIZE/2
+
+        if (Collision2D.pointInRect(pointer, x, y, TILE_SIZE, TILE_SIZE)) {
+          if (Mouse.isJustPressed(MouseButton.LEFT)) {
+            unit.vec2 = Vec2.new(_greenTiles[i].x,_greenTiles[i].y)
+            _selectedUnit = null
+          }
+        }
+
+        Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, GreenTile)
+      }
+    }
+
+    // draw units
+    for (i in 0.._units.count-1) {
+      var unit = _units[i]
+
+      var x = GRID_OFFSET_X + (unit.x - unit.y) * TILE_SIZE
+      var y = GRID_OFFSET_Y + (unit.x + unit.y) * TILE_SIZE/2 - TILE_SIZE
+
+      if (Collision2D.pointInRect(pointer, x, y, unit.width, unit.height)) {
+        Draw.texturedQuad( x - 3, y - 3 , unit.width + 3, unit.height + 3, unit.texture)
+        
+        if (Mouse.isJustPressed(MouseButton.LEFT) && _selectedUnit == null) {
+          _selectedUnit = unit
+          System.print(unit.id)
+
+          if (_selectedUnit.id == 1) {
+            _greenTiles = Tile.getReachable(unit.x, unit.y, unit.speed)
+            System.print(_greenTiles)
+          }
+        }
+      } else {
+        Draw.texturedQuad(x, y, unit.width, unit.height, unit.texture)
+        if (Mouse.isJustPressed(MouseButton.LEFT)) {
+          _selectedUnit = null
+        }
+      }
+    }
   }
 }
