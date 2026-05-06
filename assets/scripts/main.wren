@@ -4,7 +4,7 @@ import "vector" for Vec2
 import "collision" for Collision2D
 import "input" for Mouse, MouseButton, Keyboard, Key
 
-var GRID_SIZE = 1
+var GRID_SIZE = 8
 var TILE_SIZE = 64
 
 var GRID_OFFSET_X = 500
@@ -12,6 +12,34 @@ var GRID_OFFSET_Y = 200
 
 var CENTER_X = 1280 / 2
 var CENTER_Y = 720 / 2
+
+var ArrowBL = Texture2D.fromUri("http://localhost:3000/textures/arrows/arrowBL64x64.png")
+var ArrowBR = Texture2D.fromUri("http://localhost:3000/textures/arrows/arrowBR64x64.png")
+var ArrowTL = Texture2D.fromUri("http://localhost:3000/textures/arrows/arrowTL64x64.png")
+var ArrowTR = Texture2D.fromUri("http://localhost:3000/textures/arrows/arrowTR64x64.png")
+var ArrowUP = Texture2D.fromUri("http://localhost:3000/textures/arrows/arrowUP64x64.png")
+
+var SnowTileBase = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_base.png")
+var SnowTileLand = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_land.png")
+var SnowTileBottomLeft = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_bottom_left.png")
+var SnowTileBottomSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_bottom_side.png")
+var SnowTileLeftSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_left_side.png")
+var SnowTileRightBottomCorner = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_right_bottom_corner.png")
+var SnowTileRightSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_right_side.png")
+var SnowTileUpperLeftCorner = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_upper_left_corner.png")
+var SnowTileUpperSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_upper_side.png")
+var SnowTileRightCorner = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_top_right_corner.png")
+
+var GreenTile = Texture2D.fromUri("http://localhost:3000/textures/tiles/green_tile.png")
+var RedTile = Texture2D.fromUri("http://localhost:3000/textures/tiles/red_tile.png")
+
+var Bullet = Texture2D.fromUri("http://localhost:3000/textures/bullets/bullet.png")
+var BulletMS = Texture2D.fromUri("http://localhost:3000/textures/bullets/bullet_ms.png")
+
+var Mountain = Texture2D.fromUri("http://localhost:3000/textures/environment/mountain64px.png")
+var Olaf = Texture2D.fromUri("http://localhost:3000/textures/olaf.png")
+
+var LoremPicsum = Texture2D.fromUri("https://picsum.photos/64")
 
 class Tile {
   construct new(id, x, y, texture) {
@@ -110,116 +138,6 @@ class Enemy {
   }
 }
 
-class StraightMovement {
-  construct new(angle) {
-    _angle = angle
-  }
-
-  move(obj) {
-    var dx = obj.speed * _angle.cos
-    var dy = obj.speed * _angle.sin
-    obj.move(dx,dy)
-  }
-}
-
-class RovingXMovement {
-  direction { _direction }
-  construct new(direction, width) {
-    _direction = direction
-    _width = width
-    _t = width/2
-  }
-
-  move(obj) {
-    var dx = obj.speed * _direction
-    var dy = 0
-    obj.move(dx,dy)
-
-    _t = _t + 1
-
-    if (_t >= _width) {
-      _t = 0
-      _direction = -_direction
-    } 
-  }
-}
-
-class RovingYMovement {
-  direction { _direction }
-  construct new(direction, width) {
-    _direction = direction
-    _width = width
-    _t = width/2
-  }
-
-  move(obj) {
-    var dx = 0
-    var dy = obj.speed * _direction
-    obj.move(dx,dy)
-
-    _t = _t + 1
-
-    if (_t >= _width) {
-      _t = 0
-      _direction = -_direction
-    } 
-  }
-}
-
-class Pattern {
-  static createCrossBalls(anchor, group) {
-      var ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(Num.tau + Num.pi/4)) // bottom-right
-      group.add(ball)
-      ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(Num.tau/2 + Num.pi/4)) // top-left
-      group.add(ball)
-      ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(Num.tau/4 + Num.pi/4)) // bottom-left
-      group.add(ball)
-      ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(3*Num.tau/4 + Num.pi/4)) // top-right
-      group.add(ball)
-  }
-
-  static createPlusBalls(anchor, group) {
-    var ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(Num.tau)) // right
-    group.add(ball)
-    ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(Num.tau/2)) // left
-    group.add(ball)
-    ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(Num.tau/4)) // bottom
-    group.add(ball)
-    ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(3*Num.tau/4)) // top
-    group.add(ball)
-  }
-
-  static createEightBalls(anchor, group) {
-    var ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(Num.tau)) // right
-    group.add(ball)
-    ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(Num.tau/2)) // left
-    group.add(ball)
-    ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(Num.tau/4)) // bottom
-    group.add(ball)
-    ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(3*Num.tau/4)) // top
-    group.add(ball)
-    ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(Num.tau + Num.pi/4)) // bottom-right
-    group.add(ball)
-    ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(Num.tau/2 + Num.pi/4)) // top-left
-    group.add(ball)
-    ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(Num.tau/4 + Num.pi/4)) // bottom-left
-    group.add(ball)
-    ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2, 3, StraightMovement.new(3*Num.tau/4 + Num.pi/4)) // top-right
-    group.add(ball)
-  }
-
-  static shootLaser(anchor, group) {
-    var start 
-    var ball = Enemy.new(anchor.x + TILE_SIZE / 2, anchor.y + TILE_SIZE / 2)
-  }
-}
-
-class UI {
-  static drawHP(anchor) {
-    return Draw.quad(anchor.x, anchor.y - 30, anchor.hp, 5, 0x00FF00FF)
-  }
-}
-
 class Unit {
   construct new(id, x,y, w, h, texture) {
     _id = id
@@ -248,54 +166,51 @@ class Unit {
   }
 }
 
-class Ball {
-  construct new(x,y,r) {
+class Projectile {
+  construct new(x,y,tx,ty,speed,timer, texture, texture2) {
     _x = x
     _y = y
-    _radius = r
+    _tx = tx
+    _ty = ty
+    _speed = speed
+    _timer = timer
+    _texture = texture
+    _texture2 = texture2
   }
 
   x { _x }
   y { _y }
-  radius { _radius }
-
-  movement { _movement }
+  tx { _tx }
+  ty { _ty }
+  speed { _speed }
+  timer { _timer }
+  texture { _texture }
+  texture2 { _texture2 }
   
-  movement=(value) {
-    _movement = value
+  timer=(value){
+    _timer = value
   }
 
   vec2 {
     return Vec2.new(_x, _y)
   }
 
+  targetVec2 {
+    return Vec2.new(_tx, _ty)
+  }
+
   vec2=(value) {
     _x = value.x
     _y = value.y
   }
+
+  projectTiles() {
+    var vi = Vec2.new(_x,_y)
+    var vf = Vec2.new(_tx,_ty)
+
+    return Vec2.line(vi, vf)
+  }
 }
-
-var SnowTileBase = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_base.png")
-var SnowTileLand = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_land.png")
-var SnowTileBottomLeft = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_bottom_left.png")
-var SnowTileBottomSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_bottom_side.png")
-var SnowTileLeftSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_left_side.png")
-var SnowTileRightBottomCorner = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_right_bottom_corner.png")
-var SnowTileRightSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_right_side.png")
-var SnowTileUpperLeftCorner = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_upper_left_corner.png")
-var SnowTileUpperSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_upper_side.png")
-var SnowTileRightCorner = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_top_right_corner.png")
-
-var GreenTile = Texture2D.fromUri("http://localhost:3000/textures/tiles/green_tile.png")
-var RedTile = Texture2D.fromUri("http://localhost:3000/textures/tiles/red_tile.png")
-
-var Bullet = Texture2D.fromUri("http://localhost:3000/textures/bullet/bullet.png")
-var BulletMS = Texture2D.fromUri("http://localhost:3000/textures/bullet/bullet_ms.png")
-
-var Mountain = Texture2D.fromUri("http://localhost:3000/textures/environment/mountain64px.png")
-var Olaf = Texture2D.fromUri("http://localhost:3000/textures/olaf.png")
-
-var LoremPicsum = Texture2D.fromUri("https://picsum.photos/64")
 
 class Main {
   construct init() {
@@ -315,7 +230,8 @@ class Main {
     _greenTiles = []
     _redTiles = []
 
-    _balls = []
+    // projectile queue
+    _projectiles = []
 
     var startingX = 4
     var startingY = 4
@@ -369,6 +285,18 @@ class Main {
     _units.add(_olaf)
 
     _selectedUnit = null
+
+    _bullet = Projectile.new(3,-1,3,8,1,2, Bullet, BulletMS)
+    _bullet2 = Projectile.new(5,-1,6,8,1,1, Bullet, BulletMS)
+    _bullet3 = Projectile.new(8,5,5,8,1,4, Bullet, BulletMS)
+    _bullet4 = Projectile.new(3,-1,7,1,1,5, Bullet, BulletMS)
+    _bullet5 = Projectile.new(-1,-1,8,8,1,3, Bullet, BulletMS)
+    _projectiles.add(_bullet)
+    _projectiles.add(_bullet2)
+    _projectiles.add(_bullet3)
+    _projectiles.add(_bullet4)
+    _projectiles.add(_bullet5)
+    System.print(_bullet.projectTiles())
   }
 
   frame(dt) {
@@ -376,14 +304,13 @@ class Main {
 
     var pointer = Vec2.new(Mouse.x(), Mouse.y())
 
-
     // FOR ALL GRID OBJECTS: always add GRID_OFFSET_X and GRID_OFFSET_Y to x and y
     // draw grid
     for (i in 0.._grid.count-1) {
       var tile = _grid[i]
 
-      var x = GRID_OFFSET_X + ((tile.x - tile.y) * TILE_SIZE)
-      var y = GRID_OFFSET_Y + ((tile.x + tile.y) * TILE_SIZE/2) + TILE_SIZE
+      var x = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
+      var y = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2 + TILE_SIZE
 
       Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, tile.texture)
 
@@ -396,7 +323,6 @@ class Main {
         if (Mouse.isJustPressed(MouseButton.LEFT)) {
           tile.triggerClick()
         }
-        Draw.texturedQuad(x,y, TILE_SIZE,TILE_SIZE, LoremPicsum)
       }
     }
 
@@ -407,8 +333,9 @@ class Main {
 
       // draw available tiles
       for (i in 0.._greenTiles.count-1) {
-        var x = GRID_OFFSET_X + (_greenTiles[i].x - _greenTiles[i].y) * TILE_SIZE
-        var y = GRID_OFFSET_Y + (_greenTiles[i].x + _greenTiles[i].y) * TILE_SIZE/2
+        var tile = _greenTiles[i]
+        var x = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
+        var y = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2
 
         var v1 = Vec2.new(x + (TILE_SIZE), y) // top vertex
         var v2 = Vec2.new(x + (TILE_SIZE), y + (TILE_SIZE)) // center vertex
@@ -417,7 +344,7 @@ class Main {
 
         if (Vec2.pointInQuad(pointer.x, pointer.y, v1, v2, v3, v4)) {
           if (Mouse.isJustPressed(MouseButton.LEFT)) {
-            unit.vec2 = Vec2.new(_greenTiles[i].x,_greenTiles[i].y)
+            unit.vec2 = Vec2.new(tile.x, tile.y)
             _selectedUnit = null
           }
         }
@@ -455,6 +382,66 @@ class Main {
         if (Mouse.isJustPressed(MouseButton.LEFT)) {
           _selectedUnit = null
         }
+      }
+    }
+
+    // draw projectile
+    for (i in _projectiles.count-1..-1) {
+      if (i == -1) break
+      
+      var projectile = _projectiles[i]
+      
+      if (projectile.vec2 == projectile.targetVec2) {
+        _projectiles.removeAt(i)
+        break
+      }
+
+
+      var pt = projectile.projectTiles()
+      if (pt.count > 0) {
+        for (j in 0..pt.count-1) {
+          var tile = pt[j]
+
+          var ptx = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
+          var pty = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2 + TILE_SIZE 
+          Draw.texturedQuad(ptx, pty, TILE_SIZE, TILE_SIZE, RedTile)
+        }
+
+        var x = GRID_OFFSET_X + (projectile.x - projectile.y) * TILE_SIZE
+        var y = GRID_OFFSET_Y + (projectile.x + projectile.y) * TILE_SIZE/2
+
+        if (Tile.isCorner(projectile.x, projectile.y)) {
+          Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, projectile.texture2)
+        } else {
+          Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, projectile.texture)
+        }
+
+        if (projectile.timer > 0) {
+            for (j in 1..projectile.timer) {
+            var tx = x + j * 16
+            var ty = y + 16
+            Draw.texturedQuad(tx, ty, 16, 16, Olaf)
+          }
+        } else {
+          System.print(pt)
+          var steps = (projectile.speed + 1) % pt.count
+          if (steps == 0) steps = steps + 1 
+          var target = null
+
+          target = pt[steps]
+
+          if (target != null) {
+            var movement = Vec2.moveTowardsFiber(projectile, target, steps * TILE_SIZE)
+            movement.call()
+          }  
+          pt.removeAt((pt.count-1))
+           
+          projectile.timer = 1
+        }
+      }
+
+      if (Keyboard.isJustPressed(Key.SPACE)) {
+        projectile.timer = projectile.timer - 1
       }
     }
   }
