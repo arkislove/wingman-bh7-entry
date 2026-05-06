@@ -70,8 +70,8 @@ class Tile {
     }
   }
 
-  static isCorner(x,y) {  
-    return (x < 0) || (y < 0) || (x > GRID_SIZE - 1) || (y > GRID_SIZE - 1)
+  static isOutOfBounds(tile) {
+    return tile.x < 0 || tile.y < 0 || tile.x > GRID_SIZE-1 || tile.y > GRID_SIZE-1
   }
 
   static getReachable(startX, startY, speed) {
@@ -87,7 +87,7 @@ class Tile {
 
         var key = "%(x),%(y)"
 
-        if (isCorner(x-1,y-1)) continue
+        if (isOutOfBounds(Vec2.new(x,y))) continue
         if (visited.containsKey(key)) continue
         visited[key] = true
 
@@ -109,43 +109,28 @@ class Tile {
   }
 }
 
-class Player {
-  x { _x }
-  y { _y }
-  color { 0xFF0000FF }
-  maxHP { _maxHP }
-  hp { _hp }
-
-  construct new(x, y, maxHP) {
-    _x = x
-    _y = y
-    _maxHP = maxHP
-    _hp = maxHP
+class Health {
+  construct new(max) {
+    _max = max
+    _current = max 
   }
 
-  takeDamage(points) {
-    _hp = _hp - points
-  }
-}
+  current { _current }
+  max { _max }
 
-class Enemy {
-  vec2 { _vec2 }
-  speed { _speed }
-  color { 0xFF0000FF }
-
-  construct new(vec2, speed) {
-    _vec2 = vec2
-    _speed = speed
+  current=(value) {
+    _current = value
   }
 }
 
 class Unit {
-  construct new(id, x,y, w, h, texture) {
+  construct new(id, x,y, w, h, hp, texture) {
     _id = id
     _x = x
     _y = y
     _width = w
     _height = h
+    _hp = hp
     _texture = texture
   }
 
@@ -155,6 +140,11 @@ class Unit {
   width { _width }
   height { _height }
   texture { _texture }
+
+  hp { _hp.current }
+  hp=(value) {
+    _hp.current = value
+  } 
   speed { 3 } // temporarily set for testing
 
   vec2 {
@@ -312,7 +302,8 @@ class Main {
       }
     }
 
-    _wisp = Unit.new(1, 3, 3, TILE_SIZE, TILE_SIZE, WispSprite)
+    var hp = Health.new(5)
+    _wisp = Unit.new(1, 3, 3, TILE_SIZE, TILE_SIZE, hp, WispSprite)
     _units.add(_wisp)
 
     _selectedUnit = null
@@ -338,7 +329,7 @@ class Main {
       var tile = _grid[i]
 
       var x = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
-      var y = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2 + TILE_SIZE
+      var y = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2
 
       Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, tile.texture)
 
@@ -398,10 +389,10 @@ class Main {
           for (j in 0..pt.count-1) {
             var tile = pt[j]
 
-            if (tile.x < 0 || tile.y < 0 || tile.x > GRID_SIZE-1 || tile.y > GRID_SIZE-1) continue 
+            if (Tile.isOutOfBounds(tile)) continue
 
             var ptx = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
-            var pty = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2 + TILE_SIZE
+            var pty = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2
 
             Draw.texturedQuad(ptx, pty, TILE_SIZE, TILE_SIZE, RedTile)
           }
@@ -440,6 +431,17 @@ class Main {
           _selectedUnit = null
         }
       }
+
+      // draw hp
+      if (unit.hp > 0) {
+        for (j in 1..unit.hp) {
+          var tx = x + j * 16
+          var ty = y + 16
+          Draw.texturedQuad(tx, ty, 16, 16, WispSprite)
+        }
+      } else {
+        _units.remove(unit)
+      }
     }
 
     // draw projectile
@@ -458,11 +460,11 @@ class Main {
         continue
       }
 
+      var x = GRID_OFFSET_X + (projectile.x - projectile.y) * TILE_SIZE
+      var y = GRID_OFFSET_Y + (projectile.x + projectile.y) * TILE_SIZE / 2 - TILE_SIZE
+      
       if (pt.count > 0) {
-        var x = GRID_OFFSET_X + (projectile.x - projectile.y) * TILE_SIZE/1
-        var y = GRID_OFFSET_Y + (projectile.x + projectile.y) * TILE_SIZE/2
-
-        if (Tile.isCorner(projectile.x, projectile.y)) {
+        if (Tile.isOutOfBounds(projectile)) {
           Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, projectile.texture2)
         } else {
           Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, projectile.texture)
@@ -473,7 +475,7 @@ class Main {
             for (j in 1..projectile.timer) {
             var tx = x + j * 16
             var ty = y + 16
-            Draw.texturedQuad(tx, ty, 16, 16, WispSprite)
+            Draw.texturedQuad(tx, ty, 16, 16, Bullet)
           }
         } else {
           var steps = (projectile.speed) % pt.count
@@ -482,6 +484,18 @@ class Main {
               var target = pt[step]
               if (projectile.vec2 != target) {
                 projectile.vec2 = Vec2.moveTowards(projectile.vec2, target, projectile.speed)    
+              }
+              
+              for (u in _units.count-1..-1) {
+                if (u == -1) break
+                
+                var unit = _units[u]
+                if (projectile.vec2 == unit.vec2) {
+                  System.print("%(projectile) %(i) hit unit %(u): %(unit.vec2)")
+                  unit.hp = unit.hp - 1
+                  _projectiles.removeAt(i)
+                  Fiber.yield()
+                }
               }
               Fiber.yield()
             }
