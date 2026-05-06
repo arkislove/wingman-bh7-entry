@@ -5,13 +5,13 @@ import "collision" for Collision2D
 import "input" for Mouse, MouseButton, Keyboard, Key
 
 var GRID_SIZE = 8
-var TILE_SIZE = 64
-
-var GRID_OFFSET_X = 500
-var GRID_OFFSET_Y = 200
+var TILE_SIZE = 64 
 
 var CENTER_X = 1280 / 2
 var CENTER_Y = 720 / 2
+
+var GRID_OFFSET_X = 500
+var GRID_OFFSET_Y = 200
 
 var ArrowBL = Texture2D.fromUri("http://localhost:3000/textures/arrows/arrowBL.png")
 var ArrowBR = Texture2D.fromUri("http://localhost:3000/textures/arrows/arrowBR.png")
@@ -317,8 +317,8 @@ class Main {
 
     _selectedUnit = null
 
-    _bullet1 = Projectile.new(9, 2,"TOP_LEFT",2,1, Bullet, BulletMS)
-    _bullet2 = Projectile.new(6, 9,"TOP_RIGHT",2,2, Bullet, BulletMS)
+    _bullet1 = Projectile.new(8, 2,"TOP_LEFT",2,1, Bullet, BulletMS)
+    _bullet2 = Projectile.new(6, 8,"TOP_RIGHT",2,2, Bullet, BulletMS)
     _bullet3 = Projectile.new(3,-1,"BOTTOM_LEFT",2,3, Bullet, BulletMS)
     _bullet4 = Projectile.new(-1,5,"BOTTOM_RIGHT",2,4, Bullet, BulletMS)
     _projectiles.add(_bullet1)
@@ -476,30 +476,17 @@ class Main {
             Draw.texturedQuad(tx, ty, 16, 16, WispSprite)
           }
         } else {
-          var steps = (projectile.speed) % pt.count 
-          var fiber = Fiber.new {
-            for (step in 1..steps) {
+          var steps = (projectile.speed) % pt.count
+          for (step in 1..steps) {
+            var fiber = Fiber.new {
               var target = pt[step]
-
-              while (true) {
-                System.print("%(projectile) => %(target)")
-                projectile.vec2 = Vec2.moveTowards(projectile.vec2, target, 1)
-
-                for (k in 0.._units.count-1) {
-                  var unit = _units[k]
-                  if (projectile.vec2 == unit.vec2) {
-                    System.print("%(projectile) hit %(unit) at %(unit.vec2)")
-                  }
-                }
-
-                if (projectile.vec2 == target) break
-
-                Fiber.yield()
+              if (projectile.vec2 != target) {
+                projectile.vec2 = Vec2.moveTowards(projectile.vec2, target, projectile.speed)    
               }
+              Fiber.yield()
             }
+            _movementQueue.add(fiber)
           }
-          _movementQueue.add(fiber)
-          System.print(_movementQueue)
           projectile.timer = 1
         }
       }
@@ -512,12 +499,11 @@ class Main {
     if (_movementQueue.count > 0) {
       var current = _movementQueue[0]
 
+      current.call()
       if (!current.isDone) {
-          current.call()
       } else {
-        _movementQueue.removeAt(0)
+      _movementQueue.removeAt(0)
       }
-
     }
   }
 }
