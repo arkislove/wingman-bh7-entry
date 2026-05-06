@@ -24,25 +24,15 @@ class Vec2 {
   // `obj` should be an object with a Vec2
   // `target` is a Vec2   
   // `maxDistanceDelta` is a number
-  static moveTowardsFiber(obj, target, maxDistanceDelta) {
-    return Fiber.new {
-      while (true) {
-        var current = obj.vec2
+  static moveTowards(current, target, maxDistanceDelta) {
+    var toVector = target - current
+    var dist = toVector.magnitude
 
-        var toVector = target - current
-        var dist = toVector.magnitude
-
-        if (dist <= maxDistanceDelta || dist == 0) {
-          obj.vec2 = target
-          break
-        }
-
-        var step = (toVector / dist) * maxDistanceDelta
-        obj.vec2 = current + step
-
-        Fiber.yield()
-      }
+    if (dist <= maxDistanceDelta || dist == 0) {
+        return target
     }
+
+    return current + (toVector  / dist) * maxDistanceDelta
   }
 
   toString { "(%(_x), %(_y))" }
