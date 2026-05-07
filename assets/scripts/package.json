@@ -15,6 +15,7 @@
     "gfx": "http://localhost:3000/scripts/gfx.wren",
     "input": "http://localhost:3000/scripts/input.wren",
     "vector": "http://localhost:3000/scripts/vector.wren",
-    "collision": "http://localhost:3000/scripts/collision.wren"
+    "collision": "http://localhost:3000/scripts/collision.wren",
+    "level": "http://localhost:3000/scripts/level.wren"
   }
 }
