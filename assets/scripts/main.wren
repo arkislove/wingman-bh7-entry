@@ -4,8 +4,8 @@ import "gfx" for Texture2D
 import "vector" for Vec2
 import "collision" for Collision2D
 import "input" for Mouse, MouseButton, Keyboard, Key
+import "level" for Level
 
-var GRID_SIZE = 8
 var TILE_SIZE = 64 
 
 var CENTER_X = 1280 / 2
@@ -48,7 +48,7 @@ class Tile {
   }
 
   static isOutOfBounds(tile) {
-    return tile.x < 0 || tile.y < 0 || tile.x > GRID_SIZE-1 || tile.y > GRID_SIZE-1
+    return tile.x < 0 || tile.y < 0
   }
 
   static getReachable(startX, startY, speed) {
@@ -101,7 +101,8 @@ class Health {
 }
 
 class Unit {
-  construct new(id, x, y, sprites, hp) {
+  construct new(id, name, x, y, sprites, hp) {
+    _name = name
     _id = id
     _x = x
     _y = y
@@ -110,6 +111,7 @@ class Unit {
   }
 
   id { _id }
+  name { _name }
   x { _x }
   y { _y }
   sprites { _sprites }
@@ -167,7 +169,6 @@ class Projectile {
     _y = y
     _dmg = dmg
     _direction = direction
-    var targetTile = targetTile()
     _tx = targetTile.x
     _ty = targetTile.y
     _speed = speed
@@ -213,22 +214,6 @@ class Projectile {
     _y = value.y
   }
 
-  targetTile (){
-    if (_direction == "NW") {
-      return Vec2.new(-1, _y)
-    }
-    if (_direction == "NE") {
-      return Vec2.new(_x, -1)
-    }
-    if (_direction == "SW") {
-      return Vec2.new(x, GRID_SIZE+1)
-    }
-    if (_direction == "SE") {
-      return Vec2.new(GRID_SIZE+1, _y)
-    }
-    return Vec2.new(0,0)
-  }
-
   projectTiles {
     var vi = Vec2.new(_x,_y)
     var vf = Vec2.new(_tx,_ty)
@@ -240,49 +225,59 @@ class Projectile {
 class Main {
   construct init() {
     // sprite
-    _atlas = SpriteAtlas.fromGrid(Spritesheet, TILE_SIZE * 8, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE)
-    _bulletAtlas = SpriteAtlas.fromGrid(Bullet, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
-    _bulletMSAtlas = SpriteAtlas.fromGrid(BulletMS, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
-
-    // snow tiles
-    _snowTileBaseSprite = Sprite2D.new(_atlas, 10)
-    _snowTileLandSprite = Sprite2D.new(_atlas, 2)
-
-    _snowTileNSprite = Sprite2D.new(_atlas, 16)
-    _snowTileESprite = Sprite2D.new(_atlas, 0)
-    _snowTileWSprite = Sprite2D.new(_atlas, 24)
-    _snowTileSSprite = Sprite2D.new(_atlas, 8)
-
-    _snowTileNWSprite = Sprite2D.new(_atlas, 25)
-    _snowTileNESprite = Sprite2D.new(_atlas, 1)
-    _snowTileSWSprite = Sprite2D.new(_atlas, 9)
-    _snowTileSESprite = Sprite2D.new(_atlas, 17)
-
-    // indicators
-    _greenTileSprite = Sprite2D.new(_atlas, 11)
-    _redTileSprite = Sprite2D.new(_atlas, 3) 
-    _yellowBorderSprite = Sprite2D.new(_atlas, 19) 
-    _arrowNWSprite = Sprite2D.new(_atlas, 30)
-    _arrowNESprite = Sprite2D.new(_atlas, 7)
-    _arrowSWSprite = Sprite2D.new(_atlas, 31)
-    _arrowSESprite = Sprite2D.new(_atlas, 22)
-
-    // units
-    _wispSprite = Sprite2D.new(_atlas, 6)
-
-
-    // projectiles
-    _bulletSprite = Sprite2D.new(_bulletAtlas, 0)
-    _bulletMSSprite = Sprite2D.new(_bulletMSAtlas, 0)
+    var mainAtlas = SpriteAtlas.fromGrid(Spritesheet, TILE_SIZE * 8, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE)
+    var bulletAtlas = SpriteAtlas.fromGrid(Bullet, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
+    var bulletMSAtlas = SpriteAtlas.fromGrid(BulletMS, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
+    
+    _sprites = {
+      "main": {
+        "snowTileE":        Sprite2D.new(mainAtlas, 0),
+        "snowTileNE":       Sprite2D.new(mainAtlas, 1),
+        "snowTileLand":     Sprite2D.new(mainAtlas, 2),
+        "redIndicator":     Sprite2D.new(mainAtlas, 3),
+        "tree":             Sprite2D.new(mainAtlas, 4),
+        "lanternOn":        Sprite2D.new(mainAtlas, 5),
+        "wisp":             Sprite2D.new(mainAtlas, 6),
+        "arrowNE":          Sprite2D.new(mainAtlas, 7),
+        "snowTileS":        Sprite2D.new(mainAtlas, 8),
+        "snowTileSW":       Sprite2D.new(mainAtlas, 9),
+        "snowTileBase":     Sprite2D.new(mainAtlas, 10),
+        "greenIndicator":   Sprite2D.new(mainAtlas, 11),
+        "slimeLeft":        Sprite2D.new(mainAtlas, 12),
+        "lanternOff":       Sprite2D.new(mainAtlas, 13),
+        "emptyHpBar":       Sprite2D.new(mainAtlas, 14),
+        "arrowUp":          Sprite2D.new(mainAtlas, 15),
+        "snowTileN":        Sprite2D.new(mainAtlas, 16),
+        "snowTileSE":       Sprite2D.new(mainAtlas, 17),
+        "snowTileCracked":  Sprite2D.new(mainAtlas, 18),
+        "yellowIndicator":  Sprite2D.new(mainAtlas, 19),
+        "slimeRight":       Sprite2D.new(mainAtlas, 20),
+        "lanternGlow":      Sprite2D.new(mainAtlas, 21),
+        "arrowSE":          Sprite2D.new(mainAtlas, 22),
+        "activeIndicator":  Sprite2D.new(mainAtlas, 23),
+        "snowTileW":        Sprite2D.new(mainAtlas, 24),
+        "snowTileNW":       Sprite2D.new(mainAtlas, 25),
+        "iceTile":          Sprite2D.new(mainAtlas, 26),
+        "mountain":         Sprite2D.new(mainAtlas, 27),
+        "slimeBack":        Sprite2D.new(mainAtlas, 28),
+        "lanternBroken":    Sprite2D.new(mainAtlas, 29),
+        "arrowNW":          Sprite2D.new(mainAtlas, 30),
+        "arrowSW":          Sprite2D.new(mainAtlas, 31),
+      },
+      "bullet" : {
+        "bullet": 0
+      },
+      "bulletMS" : {
+        "bulletMS": 0
+      }
+    }
 
     _time = 0
 
-    _demoLevel = []
-    
     // grid tiles are the base
     _grid = []
 
-    // units
+    // units and projectiles are on top of the grid tiles
     _units = []
     _projectiles = []
 
@@ -294,51 +289,38 @@ class Main {
     // event
     _eventQueue = []
 
+    var level = Level.level0(_sprites)
+
+    var grid = level["grid"]
+    var units = level["units"]
+
+    _gridSize = Vec2.new(0,0)
+
+    for (i in 0..units.count-1) {
+      var x = units[i][0]
+      var y = units[i][1]
+      var name = units[i][2]
+      var sprites = { "base" : units[i][2] }
+
+      var unit = Unit.new(_units.count, name, x, y, sprites, 3)
+      _units.add(unit)
+    }
+
     var addDefaultTile = Fn.new {|id, x, y|
-      var tile = Tile.new(id, x, y, _snowTileLandSprite)
+      var tile = Tile.new(id, x, y, 0)
       _grid.add(tile)
     }
 
-    for (i in 0..GRID_SIZE-1) {
-      for (j in 0..GRID_SIZE-1) {
-        var id = (i * GRID_SIZE) + j
-
-        var x = i
-        var y = j
-
-        var tile = null
-
-        if (id < _demoLevel.count){
-          tile = Tile.new(id, x, y, _demoLevel[id])
-          _grid.add(tile)
-        } else {
-          addDefaultTile.call(id,x,y)
-        }
+    for (i in 0..grid.count-1) {
+      var x = grid[i][0]
+      var y = grid[i][1]
+      var sprite = grid[i][2]
+      var id = x + x*y
+      var tile = Tile.new(id,x,y,sprite)
+      _grid.add(tile)
+      if (_gridSize.x < x || _gridSize.y < y) {
+        _gridSize = Vec2.new(x,y)
       }
-    }
-
-    var unitSprites = { "base": _wispSprite }
-    var hp = Health.new(5)
-    _wisp = Unit.new(1, 3, 3, unitSprites, hp)
-    _units.add(_wisp)
-
-    _selectedUnit = null
-
-    var bulletSprites = { "bullet" : _bulletSprite, "bulletMS" : _bulletMSSprite }
-    _bullet1 = Projectile.new(8, 2,1,"NW",1,1, bulletSprites)
-    _bullet2 = Projectile.new(6, 8,1,"NE",1,2, bulletSprites)
-    _bullet3 = Projectile.new(3,-1,1,"SW",1,3, bulletSprites)
-    _bullet4 = Projectile.new(-1,5,1,"SE",1,4, bulletSprites)
-    
-    var knockback = OnHitEffect.new()
-    
-    _projectiles.add(_bullet1)
-    _projectiles.add(_bullet2)
-    _projectiles.add(_bullet3)
-    _projectiles.add(_bullet4)
-
-    for (i in 0.._projectiles.count-1) {
-      _projectiles[i].addOnHitEffect(knockback)
     }
   }
 
@@ -358,7 +340,7 @@ class Main {
       tile.sprite.draw(x, y)
       var v = Tile.getTopSurfaceVectors(Vec2.new(x,y))
       if (Vec2.pointInQuad(pointer.x, pointer.y, v[0], v[1], v[2], v[3])) {
-        _yellowBorderSprite.draw(x,y)
+        _sprites["main"]["yellowIndicator"].draw(x,y)
 
         if (Mouse.isJustPressed(MouseButton.LEFT)) {
           System.print("Tile #%(tile.id): [%(tile.x),%(tile.y)]")
@@ -385,13 +367,13 @@ class Main {
         Draw.texturedQuad(v[3].x, v[3].y, 10, 10, Bullet)
 
         if (Vec2.pointInQuad(pointer.x, pointer.y, v[0], v[1], v[2], v[3])) {
-          _redTileSprite.draw(x, y)
+          _sprites["main"]["redIndicator"].draw(x, y)
           if (Mouse.isJustPressed(MouseButton.LEFT)) {
             _selectedUnit = null
             unit.vec2 = Vec2.new(tile.x, tile.y)
           }
         } else {
-          _greenTileSprite.draw(x, y)
+          _sprites["main"]["greenIndicator"].draw(x, y)
         }
       }
 
@@ -501,8 +483,10 @@ class Main {
           _selectedUnit = unit
         
           // wisp
-          if (_selectedUnit.id == 1) {
+          if (_selectedUnit.name == "wisp") {
             _greenTiles = Tile.getReachable(unit.x, unit.y, unit.speed)
+          } else {
+            _selectedUnit = null
           }
         }
       } else {
@@ -513,15 +497,15 @@ class Main {
       }
 
       // draw hp
-      if (unit.hp > 0) {
-        for (j in 1..unit.hp) {
-          var tx = x + j * 16
-          var ty = y + 16
-          unit.sprites["base"].draw(tx,ty,16)
-        }
-      } else {
-        _units.remove(unit)
-      }
+      // if (unit.hp > 0) {
+      //   for (j in 1..unit.hp) {
+      //     var tx = x + j * 16
+      //     var ty = y + 16
+      //     unit.sprites["base"].draw(tx,ty,16)
+      //   }
+      // } else {
+      //   _units.remove(unit)
+      // }
 
       if (_selectedUnit != null) {
         System.print("_selectedUnit.id : %(_selectedUnit.id) , unit.id : %(unit.id)")

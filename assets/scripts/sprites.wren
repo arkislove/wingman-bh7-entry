@@ -11,6 +11,6 @@ foreign class Sprite2D {
 foreign class AnimatedSprite2D {
   construct new(spriteAtlas, frameRate) {}
 
-  /// Progresses and draws the animatied sprite.
+  /// Progresses and draws the animated sprite.
   foreign draw(x, y)
 }
