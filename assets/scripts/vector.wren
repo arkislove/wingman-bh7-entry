@@ -21,7 +21,7 @@ class Vec2 {
   }
 
   // use this move an object's Vec2 position towards target in a STRAIGHT LINE by maxDistanceDelta per frame
-  // `obj` should be an object with a Vec2
+  // `current` is a Vec2
   // `target` is a Vec2   
   // `maxDistanceDelta` is a number
   static moveTowards(current, target, maxDistanceDelta) {
@@ -39,7 +39,7 @@ class Vec2 {
 
   // determines which side of the line the point is
   static sign(px, py, ax, ay, bx, by) {
-    return (px - bx) * (ay - by) - (ax - bx) * (py - by)
+    return (bx - ax) * (py - ay) - (by - ay) * (px - ax)
   }
 
   // determines if point is in triangle
@@ -56,7 +56,9 @@ class Vec2 {
 
   // determines if point is in quad 
   static pointInQuad(px, py, v1, v2, v3, v4) {
-    return pointInTriangle(px, py, v1.x, v1.y, v2.x, v2.y, v3.x, v3.y) || pointInTriangle(px, py, v1.x, v1.y, v3.x, v3.y, v4.x, v4.y)
+    return pointInTriangle(px, py, v1.x,v1.y, v2.x,v2.y, v3.x,v3.y) ||
+      pointInTriangle(px, py, v2.x,v2.y, v3.x,v3.y, v4.x,v4.y) ||
+      pointInTriangle(px, py, v1.x,v1.y, v3.x,v3.y, v4.x,v4.y)
   }
 
   // generates all the integer points between two positions
