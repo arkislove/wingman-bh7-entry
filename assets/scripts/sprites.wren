@@ -7,3 +7,10 @@ foreign class Sprite2D {
   foreign draw(x, y)
   foreign draw(x, y, s)
 }
+
+foreign class AnimatedSprite2D {
+  construct new(spriteAtlas, frameRate) {}
+
+  /// Progresses and draws the animatied sprite.
+  foreign draw(x, y)
+}
