@@ -10,6 +10,7 @@
   },
   "modules": {
     "shapes": "http://localhost:3000/scripts/shapes.wren",
+    "sprites": "http://localhost:3000/scripts/sprites.wren",
     "gfx": "http://localhost:3000/scripts/gfx.wren",
     "input": "http://localhost:3000/scripts/input.wren",
     "vector": "http://localhost:3000/scripts/vector.wren",
