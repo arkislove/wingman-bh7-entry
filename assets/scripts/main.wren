@@ -118,7 +118,7 @@ class Unit {
   hp=(value) {
     _hp.current = value
   } 
-  speed { 2 } // temporarily set for testing
+  speed { 5 } // temporarily set for testing
 
   vec2 {
     return Vec2.new(_x, _y)
@@ -130,11 +130,42 @@ class Unit {
   }
 }
 
+class OnHitEffect {
+  construct new() {}
+  
+  dealDamage(target, dmg) {
+    target.hp = target.hp - dmg
+  }
+
+  knockback(target, direction) {
+    var tv = target.vec2
+    if (direction == "NW") {
+      tv = tv + Vec2.new(-1, 0)
+    }
+    if (direction == "NE") {
+      tv = tv + Vec2.new(0, -1)
+    }
+    if (direction == "SW") {
+      tv = tv + Vec2.new(0, 1)
+    }
+    if (direction == "SE") {
+      tv = tv + Vec2.new(1, 0)
+    }
+    target.vec2 = Vec2.moveTowards(target.vec2, tv, 1)
+  }
+  
+  play(target, projectile) {
+    knockback(target, projectile.direction)
+    dealDamage(target, projectile.dmg)
+  }
+}
+
 // direction must be "NW", "NE", "SW", "SE" 
 class Projectile {
-  construct new(x,y,direction,speed,timer, sprites) {
+  construct new(x,y,dmg,direction,speed,timer, sprites) {
     _x = x
     _y = y
+    _dmg = dmg
     _direction = direction
     var targetTile = targetTile()
     _tx = targetTile.x
@@ -142,16 +173,23 @@ class Projectile {
     _speed = speed
     _timer = timer
     _sprites = sprites
+    _onHitEffects = []
   }
 
   x { _x }
   y { _y }
   tx { _tx }
   ty { _ty }
+  dmg { _dmg }
   speed { _speed }
   timer { _timer }
   sprites { _sprites }
   direction { _direction }
+
+  onHitEffects { _onHitEffects }
+  addOnHitEffect (value) { 
+    _onHitEffects.add(value)
+  }
   
   timer=(value){
     _timer = value
@@ -232,6 +270,7 @@ class Main {
     // units
     _wispSprite = Sprite2D.new(_atlas, 6)
 
+
     // projectiles
     _bulletSprite = Sprite2D.new(_bulletAtlas, 0)
     _bulletMSSprite = Sprite2D.new(_bulletMSAtlas, 0)
@@ -247,12 +286,13 @@ class Main {
     _units = []
     _projectiles = []
 
-    // movement
     // green = unit possible tiles
     // red = enemy "threat" tiles
     _greenTiles = []
     _redTiles = []
-    _movementQueue = []
+    
+    // event
+    _eventQueue = []
 
     var addDefaultTile = Fn.new {|id, x, y|
       var tile = Tile.new(id, x, y, _snowTileLandSprite)
@@ -285,14 +325,21 @@ class Main {
     _selectedUnit = null
 
     var bulletSprites = { "bullet" : _bulletSprite, "bulletMS" : _bulletMSSprite }
-    _bullet1 = Projectile.new(8, 2,"NW",2,1, bulletSprites)
-    _bullet2 = Projectile.new(6, 8,"NE",2,2, bulletSprites)
-    _bullet3 = Projectile.new(3,-1,"SW",2,3, bulletSprites)
-    _bullet4 = Projectile.new(-1,5,"SE",2,4, bulletSprites)
+    _bullet1 = Projectile.new(8, 2,1,"NW",1,1, bulletSprites)
+    _bullet2 = Projectile.new(6, 8,1,"NE",1,2, bulletSprites)
+    _bullet3 = Projectile.new(3,-1,1,"SW",1,3, bulletSprites)
+    _bullet4 = Projectile.new(-1,5,1,"SE",1,4, bulletSprites)
+    
+    var knockback = OnHitEffect.new()
+    
     _projectiles.add(_bullet1)
     _projectiles.add(_bullet2)
     _projectiles.add(_bullet3)
     _projectiles.add(_bullet4)
+
+    for (i in 0.._projectiles.count-1) {
+      _projectiles[i].addOnHitEffect(knockback)
+    }
   }
 
   frame(dt) {
@@ -505,16 +552,18 @@ class Main {
       
       if (pt.count > 0) {
         if (Tile.isOutOfBounds(projectile)) {
-          projectile.sprites["bulletMS"].draw(x,y)
+          // projectile.sprites["bulletMS"].draw(x,y)
         } else {
           projectile.sprites["bullet"].draw(x,y)
         }
 
         if (projectile.timer > 0) {
-            for (j in 1..projectile.timer) {
+          for (j in 1..projectile.timer) {
             var tx = x + j * 16
             var ty = y + 16
-            Draw.texturedQuad(tx, ty, 16, 16, Bullet)
+            if (Tile.isOutOfBounds(projectile)) {
+              projectile.sprites["bulletMS"].draw(tx,ty,32)
+            }
           }
         } else {
           var steps = (projectile.speed) % pt.count
@@ -525,20 +574,26 @@ class Main {
                 projectile.vec2 = Vec2.moveTowards(projectile.vec2, target, projectile.speed)    
               }
               
+              // unit collision checker
               for (u in _units.count-1..-1) {
                 if (u == -1) break
                 
                 var unit = _units[u]
                 if (projectile.vec2 == unit.vec2) {
                   System.print("%(projectile) %(i) hit unit %(u): %(unit.vec2)")
-                  unit.hp = unit.hp - 1
+                  for (i in 0..projectile.onHitEffects.count-1) {
+                    var effect = projectile.onHitEffects[i]
+
+                    effect.play(unit,projectile)
+                  }
+                  unit.hp = unit.hp - 1 // TODO: move to onHitEffect
                   _projectiles.removeAt(i)
                   Fiber.yield()
                 }
               }
               Fiber.yield()
             }
-            _movementQueue.add(fiber)
+            _eventQueue.add(fiber)
           }
           projectile.timer = 1
         }
@@ -549,13 +604,13 @@ class Main {
       }
     }
 
-    if (_movementQueue.count > 0) {
-      var current = _movementQueue[0]
+    if (_eventQueue.count > 0) {
+      var current = _eventQueue[0]
 
       current.call()
       if (!current.isDone) {
       } else {
-      _movementQueue.removeAt(0)
+      _eventQueue.removeAt(0)
       }
     }    
   }
