@@ -1,4 +1,5 @@
 import "shapes" for Draw
+import "sprites" for SpriteAtlas, Sprite2D
 import "gfx" for Texture2D
 import "vector" for Vec2
 import "collision" for Collision2D
@@ -10,64 +11,40 @@ var TILE_SIZE = 64
 var CENTER_X = 1280 / 2
 var CENTER_Y = 720 / 2
 
-var GRID_OFFSET_X = 500
+var GRID_OFFSET_X = 600
 var GRID_OFFSET_Y = 200
 
-var ArrowBL = Texture2D.fromUri("http://localhost:3000/textures/arrows/arrowBL.png")
-var ArrowBR = Texture2D.fromUri("http://localhost:3000/textures/arrows/arrowBR.png")
-var ArrowTL = Texture2D.fromUri("http://localhost:3000/textures/arrows/arrowTL.png")
-var ArrowTR = Texture2D.fromUri("http://localhost:3000/textures/arrows/arrowTR.png")
-var ArrowUP = Texture2D.fromUri("http://localhost:3000/textures/arrows/arrowUP.png")
-
-var SnowTileBase = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_base.png")
-var SnowTileLand = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_land.png")
-var SnowTileBottomLeft = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_bottom_left.png")
-var SnowTileBottomSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_bottom_side.png")
-var SnowTileLeftSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_left_side.png")
-var SnowTileRightBottomCorner = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_right_bottom_corner.png")
-var SnowTileRightSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_right_side.png")
-var SnowTileUpperLeftCorner = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_upper_left_corner.png")
-var SnowTileUpperSide = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_tile_upper_side.png")
-var SnowTileRightCorner = Texture2D.fromUri("http://localhost:3000/textures/tiles/snow_top_right_corner.png")
-
-var GreenTile = Texture2D.fromUri("http://localhost:3000/textures/tiles/green_tile.png")
-var RedTile = Texture2D.fromUri("http://localhost:3000/textures/tiles/red_tile.png")
+var Spritesheet = Texture2D.fromUri("http://localhost:3000/textures/spritesheet.png")
+var ArrowActive = Texture2D.fromUri("http://localhost:3000/textures/arrows/active.png")
 
 var Bullet = Texture2D.fromUri("http://localhost:3000/textures/bullets/bullet.png")
 var BulletMS = Texture2D.fromUri("http://localhost:3000/textures/bullets/bullet_ms.png")
 
-var Mountain = Texture2D.fromUri("http://localhost:3000/textures/environment/mountain.png")
-var OakTree = Texture2D.fromUri("http://localhost:3000/textures/environment/oaktree.png")
-var WispSprite = Texture2D.fromUri("http://localhost:3000/textures/units/wisp.png")
-
-var LoremPicsum = Texture2D.fromUri("https://picsum.photos/64")
-
 class Tile {
-  construct new(id, x, y, texture) {
+  construct new(id, x, y, sprite) {
     _id = id
     _x = x
     _y = y
-    _texture = texture
+    _sprite = sprite
   }
 
   id { _id }
   x { _x }
   y { _y }
-  texture { _texture }
-
-  onClick(value) { _onClick = value }
-  onHover(value) { _onHover = value }
-
-  triggerClick( ){
-    if (_onClick != null) {
-      _onClick.call(this)
-    }
+  sprite { _sprite }
+  
+  effect { _effect }
+  addEffect (value) {
+    _effect.add(value)
   }
 
-  triggerHover() {
-    if (_onHover != null) {
-      _onHover.call(this)
-    }
+  static getTopSurfaceVectors(tile) {
+    var v1 = Vec2.new(tile.x, tile.y - TILE_SIZE) // top
+    var v2 = Vec2.new(tile.x + TILE_SIZE, tile.y - TILE_SIZE/2) // right
+    var v3 = Vec2.new(tile.x, tile.y) // bottom
+    var v4 = Vec2.new(tile.x - TILE_SIZE, tile.y - TILE_SIZE/2) // left 
+    
+    return [v1,v2,v3,v4]
   }
 
   static isOutOfBounds(tile) {
@@ -124,28 +101,24 @@ class Health {
 }
 
 class Unit {
-  construct new(id, x,y, w, h, hp, texture) {
+  construct new(id, x, y, sprites, hp) {
     _id = id
     _x = x
     _y = y
-    _width = w
-    _height = h
+    _sprites = sprites
     _hp = hp
-    _texture = texture
   }
 
   id { _id }
   x { _x }
   y { _y }
-  width { _width }
-  height { _height }
-  texture { _texture }
-
+  sprites { _sprites }
+  
   hp { _hp.current }
   hp=(value) {
     _hp.current = value
   } 
-  speed { 3 } // temporarily set for testing
+  speed { 2 } // temporarily set for testing
 
   vec2 {
     return Vec2.new(_x, _y)
@@ -157,9 +130,9 @@ class Unit {
   }
 }
 
-// direction must be "TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT" 
+// direction must be "NW", "NE", "SW", "SE" 
 class Projectile {
-  construct new(x,y,direction,speed,timer, texture, texture2) {
+  construct new(x,y,direction,speed,timer, sprites) {
     _x = x
     _y = y
     _direction = direction
@@ -168,8 +141,7 @@ class Projectile {
     _ty = targetTile.y
     _speed = speed
     _timer = timer
-    _texture = texture
-    _texture2 = texture2
+    _sprites = sprites
   }
 
   x { _x }
@@ -178,8 +150,8 @@ class Projectile {
   ty { _ty }
   speed { _speed }
   timer { _timer }
-  texture { _texture }
-  texture2 { _texture2 }
+  sprites { _sprites }
+  direction { _direction }
   
   timer=(value){
     _timer = value
@@ -204,16 +176,16 @@ class Projectile {
   }
 
   targetTile (){
-    if (_direction == "TOP_LEFT") {
+    if (_direction == "NW") {
       return Vec2.new(-1, _y)
     }
-    if (_direction == "TOP_RIGHT") {
+    if (_direction == "NE") {
       return Vec2.new(_x, -1)
     }
-    if (_direction == "BOTTOM_LEFT") {
+    if (_direction == "SW") {
       return Vec2.new(x, GRID_SIZE+1)
     }
-    if (_direction == "BOTTOM_RIGHT") {
+    if (_direction == "SE") {
       return Vec2.new(GRID_SIZE+1, _y)
     }
     return Vec2.new(0,0)
@@ -225,25 +197,45 @@ class Projectile {
 
     return Vec2.line(vi, vf)
   }
-
-  drawArrow {  
-    if (_direction == "TOP_LEFT") {
-      return ArrowTL
-    }
-    if (_direction == "TOP_RIGHT") {
-      return ArrowTR
-    }
-    if (_direction == "BOTTOM_LEFT") {
-      return ArrowBL
-    }
-    if (_direction == "BOTTOM_RIGHT") {
-      return ArrowBR
-    }
-  }
 }
 
 class Main {
   construct init() {
+    // sprite
+    _atlas = SpriteAtlas.fromGrid(Spritesheet, TILE_SIZE * 8, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE)
+    _bulletAtlas = SpriteAtlas.fromGrid(Bullet, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
+    _bulletMSAtlas = SpriteAtlas.fromGrid(BulletMS, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
+
+    // snow tiles
+    _snowTileBaseSprite = Sprite2D.new(_atlas, 10)
+    _snowTileLandSprite = Sprite2D.new(_atlas, 2)
+
+    _snowTileNSprite = Sprite2D.new(_atlas, 16)
+    _snowTileESprite = Sprite2D.new(_atlas, 0)
+    _snowTileWSprite = Sprite2D.new(_atlas, 24)
+    _snowTileSSprite = Sprite2D.new(_atlas, 8)
+
+    _snowTileNWSprite = Sprite2D.new(_atlas, 25)
+    _snowTileNESprite = Sprite2D.new(_atlas, 1)
+    _snowTileSWSprite = Sprite2D.new(_atlas, 9)
+    _snowTileSESprite = Sprite2D.new(_atlas, 17)
+
+    // indicators
+    _greenTileSprite = Sprite2D.new(_atlas, 11)
+    _redTileSprite = Sprite2D.new(_atlas, 3) 
+    _yellowBorderSprite = Sprite2D.new(_atlas, 19) 
+    _arrowNWSprite = Sprite2D.new(_atlas, 30)
+    _arrowNESprite = Sprite2D.new(_atlas, 7)
+    _arrowSWSprite = Sprite2D.new(_atlas, 31)
+    _arrowSESprite = Sprite2D.new(_atlas, 22)
+
+    // units
+    _wispSprite = Sprite2D.new(_atlas, 6)
+
+    // projectiles
+    _bulletSprite = Sprite2D.new(_bulletAtlas, 0)
+    _bulletMSSprite = Sprite2D.new(_bulletMSAtlas, 0)
+
     _time = 0
 
     _demoLevel = []
@@ -263,15 +255,7 @@ class Main {
     _movementQueue = []
 
     var addDefaultTile = Fn.new {|id, x, y|
-      var tile = Tile.new(id, x, y, SnowTileLand)
-      var onClick = Fn.new {
-        System.print("Tile #%(id): [%(x),%(y)]")
-      }
-      tile.onClick(onClick)
-      var onHover = Fn.new {
-        Draw.texturedQuad(x, y - 10, TILE_SIZE, TILE_SIZE, tile.texture)
-      }
-      tile.onHover(onHover)
+      var tile = Tile.new(id, x, y, _snowTileLandSprite)
       _grid.add(tile)
     }
 
@@ -286,15 +270,6 @@ class Main {
 
         if (id < _demoLevel.count){
           tile = Tile.new(id, x, y, _demoLevel[id])
-
-          var onClick = Fn.new {
-            System.print("Tile #%(id): [%(x),%(y)]")
-          }
-          tile.onClick(onClick)
-          var onHover = Fn.new {
-            Draw.texturedQuad(x, y - 5  , TILE_SIZE, TILE_SIZE, tile.texture)
-          }
-          tile.onHover(onHover)
           _grid.add(tile)
         } else {
           addDefaultTile.call(id,x,y)
@@ -302,16 +277,18 @@ class Main {
       }
     }
 
+    var unitSprites = { "base": _wispSprite }
     var hp = Health.new(5)
-    _wisp = Unit.new(1, 3, 3, TILE_SIZE, TILE_SIZE, hp, WispSprite)
+    _wisp = Unit.new(1, 3, 3, unitSprites, hp)
     _units.add(_wisp)
 
     _selectedUnit = null
 
-    _bullet1 = Projectile.new(8, 2,"TOP_LEFT",2,1, Bullet, BulletMS)
-    _bullet2 = Projectile.new(6, 8,"TOP_RIGHT",2,2, Bullet, BulletMS)
-    _bullet3 = Projectile.new(3,-1,"BOTTOM_LEFT",2,3, Bullet, BulletMS)
-    _bullet4 = Projectile.new(-1,5,"BOTTOM_RIGHT",2,4, Bullet, BulletMS)
+    var bulletSprites = { "bullet" : _bulletSprite, "bulletMS" : _bulletMSSprite }
+    _bullet1 = Projectile.new(8, 2,"NW",2,1, bulletSprites)
+    _bullet2 = Projectile.new(6, 8,"NE",2,2, bulletSprites)
+    _bullet3 = Projectile.new(3,-1,"SW",2,3, bulletSprites)
+    _bullet4 = Projectile.new(-1,5,"SE",2,4, bulletSprites)
     _projectiles.add(_bullet1)
     _projectiles.add(_bullet2)
     _projectiles.add(_bullet3)
@@ -331,16 +308,13 @@ class Main {
       var x = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
       var y = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2
 
-      Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, tile.texture)
+      tile.sprite.draw(x, y)
+      var v = Tile.getTopSurfaceVectors(Vec2.new(x,y))
+      if (Vec2.pointInQuad(pointer.x, pointer.y, v[0], v[1], v[2], v[3])) {
+        _yellowBorderSprite.draw(x,y)
 
-      var v1 = Vec2.new(x + (TILE_SIZE), y) // top vertex
-      var v2 = Vec2.new(x + (TILE_SIZE), y + (TILE_SIZE)) // center vertex
-      var v3 = Vec2.new(x, y + (TILE_SIZE/2)) // left vertex
-      var v4 = Vec2.new(x + (TILE_SIZE * 2), y + (TILE_SIZE/2)) // right vertex
-
-      if (Vec2.pointInQuad(pointer.x, pointer.y, v1, v2, v3, v4)) {
         if (Mouse.isJustPressed(MouseButton.LEFT)) {
-          tile.triggerClick()
+          System.print("Tile #%(tile.id): [%(tile.x),%(tile.y)]")
         }
       }
     }
@@ -348,7 +322,7 @@ class Main {
     if (_selectedUnit != null) {
       var unit = _selectedUnit
 
-      Draw.texturedQuad(0,600, 128,128, unit.texture)
+      unit.sprites["base"].draw(0,600,128)
 
       // draw green tiles
       for (i in 0.._greenTiles.count-1) {
@@ -356,26 +330,33 @@ class Main {
         var x = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
         var y = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2
 
-        var v1 = Vec2.new(x + (TILE_SIZE), y) // top vertex
-        var v2 = Vec2.new(x + (TILE_SIZE), y + (TILE_SIZE)) // center vertex
-        var v3 = Vec2.new(x, y + (TILE_SIZE/2)) // left vertex
-        var v4 = Vec2.new(x + (TILE_SIZE * 2), y + (TILE_SIZE/2)) // right vertex
+        var v = Tile.getTopSurfaceVectors(Vec2.new(x,y))
 
-        if (Vec2.pointInQuad(pointer.x, pointer.y, v1, v2, v3, v4)) {
+        Draw.texturedQuad(v[0].x, v[0].y, 10, 10, Bullet)
+        Draw.texturedQuad(v[1].x, v[1].y, 10, 10, Bullet)
+        Draw.texturedQuad(v[2].x, v[2].y, 10, 10, Bullet)
+        Draw.texturedQuad(v[3].x, v[3].y, 10, 10, Bullet)
+
+        if (Vec2.pointInQuad(pointer.x, pointer.y, v[0], v[1], v[2], v[3])) {
+          _redTileSprite.draw(x, y)
           if (Mouse.isJustPressed(MouseButton.LEFT)) {
             _selectedUnit = null
             unit.vec2 = Vec2.new(tile.x, tile.y)
           }
+        } else {
+          _greenTileSprite.draw(x, y)
         }
-
-        Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, GreenTile)
       }
+
+      // draw active arrow
     }
 
     // draw red tiles
     if (_selectedUnit == null) {
       for (i in _projectiles.count-1..-1) {
         if (i == -1) break
+
+        var skip = false
         
         var projectile = _projectiles[i]
 
@@ -386,15 +367,68 @@ class Main {
         }
 
         if (pt.count > 0) {
+          var skip = false
           for (j in 0..pt.count-1) {
             var tile = pt[j]
+
+            for (i in 0.._units.count-1) {
+              var unit = _units[i]
+              if (tile == unit.vec2) {
+                skip = true
+                break
+              }
+            }
 
             if (Tile.isOutOfBounds(tile)) continue
 
             var ptx = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
             var pty = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2
 
-            Draw.texturedQuad(ptx, pty, TILE_SIZE, TILE_SIZE, RedTile)
+            _redTileSprite.draw(ptx,pty)
+
+            if (j > 0 && j < pt.count - 1) {
+              tile = pt[j-1]
+              ptx = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
+              pty = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2 - TILE_SIZE
+
+              var nextTile = pt[j]
+
+              var tx = GRID_OFFSET_X + (nextTile.x - nextTile.y) * TILE_SIZE
+              var ty = GRID_OFFSET_Y + (nextTile.x + nextTile.y) * TILE_SIZE/2 - TILE_SIZE
+
+              var start = Vec2.new(ptx, pty)
+              var end   = Vec2.new(tx, ty - TILE_SIZE)
+
+              var dir = (end - start)
+              var dist = dir.magnitude
+              var norm = dir / dist
+
+              var speed = 64
+              var spacing = 64
+              var offset = (_time * speed) % spacing
+
+              for (k in 0..(dist / spacing)) {
+                var t = k * spacing + offset
+                if (t > dist) continue
+
+                var pos = start + norm * t
+
+                if (projectile.direction == "NW") {
+                  _arrowNWSprite.draw(tx,ty)
+                }
+                if (projectile.direction == "NE") {
+                  _arrowNESprite.draw(tx,ty)
+                }
+                if (projectile.direction == "SW") {
+                  _arrowSWSprite.draw(tx,ty)
+                }
+                if (projectile.direction == "SE") {
+                  _arrowSESprite.draw(tx,ty)
+                }
+              }
+            }
+            
+            if (skip) break
           }
         }
       }
@@ -407,26 +441,25 @@ class Main {
       var x = GRID_OFFSET_X + (unit.x - unit.y) * TILE_SIZE
       var y = GRID_OFFSET_Y + (unit.x + unit.y) * TILE_SIZE/2 - TILE_SIZE
 
-      var w = TILE_SIZE * 2
+      var w = TILE_SIZE
       var v1 = Vec2.new(x, y)
-      var v2 = Vec2.new(x + w, y)
+      var v2 = Vec2.new(x - w, y)
       var v3 = Vec2.new(x + w, y + w)
       var v4 = Vec2.new(x, y + w)
 
       if (Vec2.pointInQuad(pointer.x, pointer.y, v1, v2, v3, v4)) {
-        Draw.texturedQuad( x - 3, y - 3 , unit.width + 3, unit.height + 3, unit.texture)
+        unit.sprites["base"].draw(x-3,y-3, TILE_SIZE+6)
         
         if (Mouse.isJustPressed(MouseButton.LEFT) && _selectedUnit == null) {
           _selectedUnit = unit
-          System.print(unit.id)
-
+        
+          // wisp
           if (_selectedUnit.id == 1) {
             _greenTiles = Tile.getReachable(unit.x, unit.y, unit.speed)
-            System.print(_greenTiles)
           }
         }
       } else {
-        Draw.texturedQuad(x, y, unit.width, unit.height, unit.texture)
+        unit.sprites["base"].draw(x,y)
         if (Mouse.isJustPressed(MouseButton.LEFT)) {
           _selectedUnit = null
         }
@@ -437,10 +470,17 @@ class Main {
         for (j in 1..unit.hp) {
           var tx = x + j * 16
           var ty = y + 16
-          Draw.texturedQuad(tx, ty, 16, 16, WispSprite)
+          unit.sprites["base"].draw(tx,ty,16)
         }
       } else {
         _units.remove(unit)
+      }
+
+      if (_selectedUnit != null) {
+        System.print("_selectedUnit.id : %(_selectedUnit.id) , unit.id : %(unit.id)")
+        if (_selectedUnit.id == unit.id) {
+          Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE - 16, ArrowActive)
+        }
       }
     }
 
@@ -465,11 +505,10 @@ class Main {
       
       if (pt.count > 0) {
         if (Tile.isOutOfBounds(projectile)) {
-          Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, projectile.texture2)
+          projectile.sprites["bulletMS"].draw(x,y)
         } else {
-          Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, projectile.texture)
+          projectile.sprites["bullet"].draw(x,y)
         }
-        Draw.texturedQuad(x, y, TILE_SIZE, TILE_SIZE, projectile.drawArrow)
 
         if (projectile.timer > 0) {
             for (j in 1..projectile.timer) {
@@ -518,6 +557,6 @@ class Main {
       } else {
       _movementQueue.removeAt(0)
       }
-    }
+    }    
   }
 }
