@@ -197,37 +197,65 @@ class Level {
   sprites=(value){
     _sprites = value
   }
-  
+
+  /* LEVEL TEMPLATE
+  static levelX (sprites) {
+    return {
+      "init" : {
+        "grid" : [
+          [x1,y1, sprites["atlasKey"]["spriteKey"]],
+          ...
+          [xn,yn, sprites["atlasKey"]["spriteKey"]]
+        ],
+        "units" : [
+          [x,y, sprites["atlasKey"]["spriteKey"]]
+        ],
+      },
+      "goalTile" : [x,y],
+      "turnEvents" : {
+        "1" : {
+          "tiles",
+          
+          "units"
+        }      
+      }
+  }
+  */  
+
   static level0 (sprites) {
     return {
-      "grid" : [
-        [0,4, sprites["main"]["snowTileBase"]],
-        [1,4, sprites["main"]["snowTileBase"]],
-        [2,4, sprites["main"]["snowTileBase"]],
-        [3,4, sprites["main"]["snowTileBase"]],
-        [3,0, sprites["main"]["snowTileBase"]],
-        [3,1, sprites["main"]["snowTileBase"]],
-        [3,2, sprites["main"]["snowTileBase"]],
-        [3,4, sprites["main"]["snowTileBase"]],
-        [4,0, sprites["main"]["snowTileBase"]],
-        [4,1, sprites["main"]["snowTileBase"]],
-        [4,2, sprites["main"]["snowTileBase"]],
-        [4,3, sprites["main"]["snowTileBase"]],
-        [4,4, sprites["main"]["snowTileBase"]],
-        [5,0, sprites["main"]["snowTileBase"]],
-        [5,1, sprites["main"]["snowTileBase"]],
-        [5,2, sprites["main"]["snowTileBase"]],
-        [6,0, sprites["main"]["snowTileBase"]],
-        [6,1, sprites["main"]["snowTileBase"]],
-        [6,2, sprites["main"]["snowTileBase"]],
-        [7,0, sprites["main"]["snowTileBase"]],
-        [7,1, sprites["main"]["snowTileBase"]],
-        [7,2, sprites["main"]["snowTileBase"]],
-      ],
-      "units" : [],
+      "init" : {
+        "grid" : [
+          [1,4, sprites["main"]["snowTileBase"]],
+          [2,4, sprites["main"]["snowTileBase"]],
+          [3,4, sprites["main"]["snowTileBase"]],
+          [3,0, sprites["main"]["snowTileBase"]],
+          [3,1, sprites["main"]["snowTileBase"]],
+          [3,2, sprites["main"]["snowTileBase"]],
+          [3,4, sprites["main"]["snowTileBase"]],
+          [4,0, sprites["main"]["snowTileBase"]],
+          [4,1, sprites["main"]["snowTileBase"]],
+          [4,2, sprites["main"]["snowTileBase"]],
+          [4,3, sprites["main"]["snowTileBase"]],
+          [4,4, sprites["main"]["snowTileBase"]],
+          [5,0, sprites["main"]["snowTileBase"]],
+          [5,1, sprites["main"]["snowTileBase"]],
+          [5,2, sprites["main"]["snowTileBase"]],
+          [6,0, sprites["main"]["snowTileBase"]],
+          [6,1, sprites["main"]["snowTileBase"]],
+          [6,2, sprites["main"]["snowTileBase"]],
+          [7,0, sprites["main"]["snowTileBase"]],
+          [7,1, sprites["main"]["snowTileBase"]],
+          [7,2, sprites["main"]["snowTileBase"]],
+        ],
+        "units" : [],
+      },
       "goalTile" : [0,4],
       "turnEvents": {
         "1" : {
+          "tiles" : [
+            Tile.new(5,0,4,sprites["main"]["snowTileLand"])
+          ],
           "units" : [
             Unit.new("wisp", 7,1, sprites["main"]["wisp"], 5)
           ],
