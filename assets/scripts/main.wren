@@ -90,7 +90,16 @@ class Main {
     _level = Level.level0(_sprites)
 
     var grid = _level["grid"]
+
     _turnEvents = _level["turnEvents"]
+    _turn = 0
+    _turnExecuted = []
+
+    _phases = _level["phases"]
+    _phase = 1
+    _phasesCompleted = []
+    
+    _goalTile = Vec2.new(_phases["1"]["goal"][0], _phases["1"]["goal"][1])
 
     _gridSize = Vec2.new(0,0)
 
@@ -105,7 +114,7 @@ class Main {
           var sprite = grid[i][2]
 
           var id = x + x*y
-          var tile = Tile.new(id, x, y, sprite)
+          var tile = Tile.new(x, y, sprite)
 
           _grid.add(tile)
 
@@ -126,19 +135,20 @@ class Main {
             var name = units[i][2]
             var sprites = units[i][2]
 
-            var unit = Unit.new(name, x, y, sprites, 3)
+            var unit = Unit.new(0, name, x, y, sprites, 3)
             _units.add(unit)
           }
         }
       }
     }
-
-    _turn = 0
-    _turnExecuted = []
   }
 
   frame(dt) {
     _time = _time + dt * 0.5
+
+    if (_phase > _phases.count) {
+      System.print("YOU WIN")
+    }
 
     var pointer = Vec2.new(Mouse.x(), Mouse.y())
 
@@ -186,7 +196,6 @@ class Main {
         var v = Tile.getTopSurfaceVectors(Vec2.new(x,y))       
 
         if (Vec2.pointInQuad(pointer.x, pointer.y, v[0], v[1], v[2], v[3])) {
-          _sprites["main"]["redIndicator"].draw(x, y)
           if (Mouse.isJustPressed(MouseButton.LEFT)) {
             _selectedUnit = null
             unit.vec2 = Vec2.new(tile.x, tile.y)
@@ -227,12 +236,10 @@ class Main {
               }
             }
 
-            if (Tile.isOutOfBounds(tile)) continue
-
             var ptx = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
             var pty = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2
 
-            _sprites["main"]["redIndicator"].draw(ptx,pty)
+            if (!(tile.x == projectile.x && tile.y == projectile.y)) _sprites["main"]["redIndicator"].draw(ptx,pty)
 
             if (j > 0 && j < pt.count - 1) {
               tile = pt[j-1]
@@ -288,11 +295,10 @@ class Main {
         var unit = _units[i]
 
         //winning condition TODO: move somwhere else
-        var goal = Vec2.new(_level["goalTile"][0],_level["goalTile"][1])
+        var goal = _goalTile
         if (unit.x == goal.x && unit.y == goal.y) {
-          System.print("win")
+          _phase = _phase + 1
         }
-
 
         var x = GRID_OFFSET_X + (unit.x - unit.y) * TILE_SIZE
         var y = GRID_OFFSET_Y + (unit.x + unit.y) * TILE_SIZE/2 - TILE_SIZE
@@ -330,7 +336,7 @@ class Main {
             var totalWidth = unit.hp * size
             var tx = x - totalWidth/2 + (j * size)
             var ty = y - size
-            unit.sprite.draw(tx,ty,16)
+            unit.sprite.draw(tx,ty,size)
           }
         } else {
           _units.remove(unit)
@@ -432,22 +438,29 @@ class Main {
           for (value in entry.value) {
             if (value.key == "units") {
               var units = value.value
-              for (i in 0..units.count-1) {
-                _units.add(units[i])
+              if (units.count > 0) {
+                for (i in 0..units.count-1) {
+                  _units.add(units[i])
+                }
               }
+              
             }
             if (value.key == "projectiles") {
               var projectiles = value.value
-              for (i in 0..projectiles.count-1) {
-                _projectiles.add(projectiles[i])
+              if (projectiles.count > 0) {
+                for (i in 0..projectiles.count-1) {
+                  _projectiles.add(projectiles[i])
+                }
               }
             }
             if (value.key == "tiles") {
               var tiles = value.value
-              for (i in 0..tiles.count-1) {
-                _grid.add(tiles[i])
+              if (tiles.count > 0) {
+                for (i in 0..tiles.count-1) {
+                  _grid.add(tiles[i])
+                }
+                _grid.sort {|a, b| a.id < b.id }
               }
-              _grid.sort {|a, b| a.id < b.id }
             }
           }
           _turnExecuted.add(turn)
@@ -456,6 +469,44 @@ class Main {
       }
     }
 
+    // level phases
+    var phase = "%(_phase)"
+    if (!_phasesCompleted.contains(phase)) {
+      for (entry in _phases) {
+        if (phase == entry.key) {
+          for (value in entry.value) {
+            if (value.key == "units") {
+              var units = value.value
+              if (units.count > 0) {
+                for (i in 0..units.count-1) {
+                  _units.add(units[i])
+                }
+              }
+              
+            }
+            if (value.key == "projectiles") {
+              var projectiles = value.value
+              if (projectiles.count > 0) {
+                for (i in 0..projectiles.count-1) {
+                  _projectiles.add(projectiles[i])
+                }
+              }
+            }
+            if (value.key == "tiles") {
+              var tiles = value.value
+              if (tiles.count > 0) {
+                for (i in 0..tiles.count-1) {
+                  _grid.add(tiles[i])
+                }
+                _grid.sort {|a, b| a.id < b.id }
+              }
+            }
+          }
+          _phasesCompleted.add(phase)
+          break
+        }
+      }
+    }
 
     if (_eventQueue.count > 0) {
       var current = _eventQueue[0]

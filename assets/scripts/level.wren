@@ -3,8 +3,8 @@ import "vector" for Vec2
 var TILE_SIZE = 64 
 
 class Tile {
-  construct new(id, x, y, sprite) {
-    _id = id
+  construct new(x, y, sprite) {
+    _id = x * x + y
     _x = x
     _y = y
     _sprite = sprite
@@ -69,7 +69,8 @@ class Tile {
 }
 
 class Unit {
-  construct new(name, x, y, sprite, hp) {
+  construct new(id, name, x, y, sprite, hp) {
+    _id = id
     _name = name
     _x = x
     _y = y
@@ -77,6 +78,7 @@ class Unit {
     _hp = hp
   }
 
+  id { _id }
   name { _name }
   x { _x }
   y { _y }
@@ -130,7 +132,7 @@ class OnHitEffect {
 
 // direction must be "NW", "NE", "SW", "SE" 
 class Projectile {
-  construct new(x,y,tx,ty,dmg,direction,speed,timer, sprite) {
+  construct new(id, x, y, tx, ty, dmg, direction, speed, timer, sprite) {
     _x = x
     _y = y
     _dmg = dmg
@@ -214,30 +216,24 @@ class Level {
       "goalTile" : [x,y],
       "turnEvents" : {
         "1" : {
-          "tiles",
-          
+          "tiles" : [
+            Tiles.new(x,y)
+          ]
           "units"
         }      
       }
   }
-  */  
-
+  */
   static level0 (sprites) {
     return {
       "init" : {
         "grid" : [
-          [1,4, sprites["main"]["snowTileBase"]],
-          [2,4, sprites["main"]["snowTileBase"]],
-          [3,4, sprites["main"]["snowTileBase"]],
           [3,0, sprites["main"]["snowTileBase"]],
-          [3,1, sprites["main"]["snowTileBase"]],
+          [3,1, sprites["main"]["snowTileLand"]],
           [3,2, sprites["main"]["snowTileBase"]],
-          [3,4, sprites["main"]["snowTileBase"]],
           [4,0, sprites["main"]["snowTileBase"]],
           [4,1, sprites["main"]["snowTileBase"]],
           [4,2, sprites["main"]["snowTileBase"]],
-          [4,3, sprites["main"]["snowTileBase"]],
-          [4,4, sprites["main"]["snowTileBase"]],
           [5,0, sprites["main"]["snowTileBase"]],
           [5,1, sprites["main"]["snowTileBase"]],
           [5,2, sprites["main"]["snowTileBase"]],
@@ -250,19 +246,34 @@ class Level {
         ],
         "units" : [],
       },
-      "goalTile" : [0,4],
+      "phases": {
+        "1" : {
+          "goal": [3,1],
+        },
+        "2" : {
+          "goal": [4,0],
+          "tiles" : [
+            Tile.new(0,4, sprites["main"]["snowTileLand"]),
+            Tile.new(1,4, sprites["main"]["snowTileBase"]),
+            Tile.new(2,4, sprites["main"]["snowTileBase"]),
+            Tile.new(3,4, sprites["main"]["snowTileBase"]),
+            Tile.new(4,4, sprites["main"]["snowTileBase"]),
+            Tile.new(4,3, sprites["main"]["snowTileBase"]),
+            Tile.new(4,3, sprites["main"]["snowTileBase"]),
+          ]
+        },
+      },
       "turnEvents": {
         "1" : {
           "tiles" : [
-            Tile.new(5,0,4,sprites["main"]["snowTileLand"])
           ],
           "units" : [
-            Unit.new("wisp", 7,1, sprites["main"]["wisp"], 5)
+            Unit.new(1, "wisp", 7,1, sprites["main"]["wisp"], 5)
           ],
           "projectiles" : [
-            Projectile.new(7,3,7,-1,1,"NE",1,1,sprites["bullet"]["bullet"]),
-            Projectile.new(6,-1,6,3,1,"SW",1,2,sprites["bullet"]["bullet"]),
-            Projectile.new(5,3,5,-1,1,"NE",1,4,sprites["bullet"]["bullet"])
+            Projectile.new(1, 7,3,7,-1,1,"NE",1,1,sprites["bullet"]["bullet"]),
+            Projectile.new(2,6,-1,6,3,1,"SW",1,2,sprites["bullet"]["bullet"]),
+            Projectile.new(3,5,3,5,-1,1,"NE",1,4,sprites["bullet"]["bullet"])
           ]
         }
       }
