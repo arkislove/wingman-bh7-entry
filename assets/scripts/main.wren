@@ -94,22 +94,26 @@ class Main {
 
     _gridSize = Vec2.new(0,0)
 
-    for (entry in _level) {
+    for (entry in _level["init"]) {
       if (entry.key == "grid") {
         var grid = entry.value
 
         if (grid.count > 0) {
-          for (i in 0..grid.count-1) {
-            var x = grid[i][0]
-            var y = grid[i][1]
-            var sprite = grid[i][2]
-            var id = x + x*y
-            var tile = Tile.new(id,x,y,sprite)
-            _grid.add(tile)
-            if (_gridSize.x < x || _gridSize.y < y) {
-              _gridSize = Vec2.new(x,y)
-            }
+         for (i in 0..grid.count-1) {
+          var x = grid[i][0]
+          var y = grid[i][1]
+          var sprite = grid[i][2]
+
+          var id = x + x*y
+          var tile = Tile.new(id, x, y, sprite)
+
+          _grid.add(tile)
+
+          if (_gridSize.x < x || _gridSize.y < y) {
+            _gridSize = Vec2.new(x, y)
           }
+        }
+        _grid.sort {|a, b| a.id < b.id }
         }
       }
       if (entry.key == "units") {
@@ -421,6 +425,7 @@ class Main {
       }
     }
 
+    // execute turn events
     if (!_turnExecuted.contains(turn)) {
       for (entry in _turnEvents) {
         if (turn == entry.key) {
@@ -436,6 +441,13 @@ class Main {
               for (i in 0..projectiles.count-1) {
                 _projectiles.add(projectiles[i])
               }
+            }
+            if (value.key == "tiles") {
+              var tiles = value.value
+              for (i in 0..tiles.count-1) {
+                _grid.add(tiles[i])
+              }
+              _grid.sort {|a, b| a.id < b.id }
             }
           }
           _turnExecuted.add(turn)
