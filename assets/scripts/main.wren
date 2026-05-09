@@ -4,7 +4,7 @@ import "gfx" for Texture2D
 import "vector" for Vec2
 import "collision" for Collision2D
 import "input" for Mouse, MouseButton, Keyboard, Key
-import "level" for Tile, Unit, OnHitEffect, Projectile, Level
+import "level" for Tile, Unit, OnHitEffect, Projectile, LevelTemplates, Level
 
 var TILE_SIZE = 64 
 
@@ -31,6 +31,9 @@ class Player {
   }
 
   fuel { _fuel }
+  addFuel(amount) {
+    _fuel = _fuel + amount
+  }
   useFuel(amount) {
     _fuel = _fuel - amount
   }
@@ -105,12 +108,16 @@ class Main {
 
     _time = 0
 
+    _level0 = LevelTemplates.level0(_sprites, _animatedSprites)
+    _level = Level.new(_level0)
+
     // grid tiles are the base
-    _grid = []
+    var grid = _level0["grid"]
+    _grid = _level.grid
 
     // units and projectiles are on top of the grid tiles
-    _units = []
-    _projectiles = []
+    _units = _level.units
+    _projectiles = _level.projectiles
 
     // green = unit possible tiles
     // red = enemy "threat" tiles
@@ -120,13 +127,9 @@ class Main {
     // event
     _eventQueue = []
 
-    _level = Level.level0(_sprites, _animatedSprites)
-
-    var grid = _level["grid"]
-
     _phase = null
     _phasesCompleted = []
-    _phases = _level["phases"]
+    _phases = _level0["phases"]
     _nextPhase = "start"
     _phaseChanging = false
     _p = null
@@ -139,7 +142,7 @@ class Main {
     
     _gridSize = Vec2.new(0,0)
 
-    for (entry in _level["init"]) {
+    for (entry in _level0["init"]) {
       if (entry.key == "grid") {
         var grid = entry.value
 
@@ -182,6 +185,7 @@ class Main {
 
     // player setup
     _player = Player.new(7)
+    
   }
 
   frame(dt) {
@@ -205,8 +209,7 @@ class Main {
         if (_phase == entry.key) {
           _p = entry.value
           _nextPhase = _p["nextPhase"]
-          _goalTile = Vec2.new(_p["goal"][0],_p["goal"][1])
-          
+          _goalTile = Vec2.new(_p["goal"][0],_p["goal"][1]) 
         }
       }
       _phasesCompleted.add(_phase)
@@ -215,10 +218,40 @@ class Main {
 
     if (_p != null) {
       if (!_turnsExecuted.contains(_turn)) {
+        // PUT TURNED BASED EVENTS HERE
+        for (i in _projectiles.count-1..-1) {
+          if (i == -1) break
+
+          var projectile = _projectiles[i]
+          projectile.timer = projectile.timer - 1
+        }
+        
+        for (i in _units.count-1..-1) {
+          if (i == -1) break
+          var unit = _units[i]
+          if (unit.name == "lantern") {
+            var mc = _units[0]
+            var dist = (mc.vec2 - unit.vec2).magnitude 
+            if (dist <= 1) {
+              _player.addFuel(1)
+            }
+          }
+        }
+        //
         for (event in _p["turnEvents"]) {
           if (event.key == _turn) {
             var object = event.value
             for (o in object) {
+              if (o.key == "events") {
+                var events = o.value
+                if (events.count > 0) {
+                  for (i in 0..events.count-1) {
+                    var event = events[i]
+
+                    _level.executeEvent(event)
+                  }
+                }
+              }
               if (o.key == "units") {
                 var units = o.value
                 if (units.count > 0) {
@@ -271,15 +304,15 @@ class Main {
     for (i in 0.._grid.count-1) {
       var tile = _grid[i]
 
-      // hide tile shenanigan
-      if (_units.count > 0) {
-        var mc = _units[0]
-        var fuel = _player.fuel
-        var mag = (mc.vec2-tile.vec2).magnitude
-        if (mag >= fuel/1.5) {
-          continue
-        }
-      }
+      // FOG-OF-WAR
+      // if (_units.count > 0) {
+      //   var mc = _units[0]
+      //   var fuel = _player.fuel
+      //   var mag = (mc.vec2-tile.vec2).magnitude
+      //   if (mag >= fuel/1.5) {
+      //     continue
+      //   }
+      // }
 
       var x = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
       var y = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2
@@ -333,15 +366,21 @@ class Main {
             
             _selectedUnit = null
             _eventQueue.add(fiber)
-            _player.useFuel(1)
-            _turn = _turn + 1
-            for (i in _projectiles.count-1..-1) {
+            var mc = _units[0]
+            for (i in _units.count-1..-1) {
               if (i == -1) break
-
-              var projectile = _projectiles[i]
-
-              projectile.timer = projectile.timer - 1
+              var unit = _units[i]
+              if (unit.name == "lantern") {
+                var mc = _units[0]
+                var dist = (mc.vec2 - unit.vec2).magnitude 
+                if (dist <= 1) {
+                  _player.addFuel(1)
+                }
+              } else {
+                _player.useFuel(1)
+              }
             }
+            _turn = _turn + 1
           }
         } else {
           _sprites["main"]["greenTile"].draw(x, y)
