@@ -31,6 +31,9 @@ class Player {
   }
 
   fuel { _fuel }
+  useFuel(amount) {
+    _fuel = _fuel - amount
+  }
 }
 
 class Main {
@@ -273,7 +276,7 @@ class Main {
         var mc = _units[0]
         var fuel = _player.fuel
         var mag = (mc.vec2-tile.vec2).magnitude
-        if (mag >= fuel/2) {
+        if (mag >= fuel/1.5) {
           continue
         }
       }
@@ -320,8 +323,6 @@ class Main {
         if (Vec2.pointInQuad(pointer.x, pointer.y, v[0], v[1], v[2], v[3])) {
           // MC movement logic
           if (Mouse.isJustPressed(MouseButton.LEFT)) {
-
-            _selectedUnit = null
             var fiber = Fiber.new {
               var target = Vec2.new(tile.x,tile.y)
               if (unit.vec2 != target) {
@@ -330,7 +331,9 @@ class Main {
               Fiber.yield()
             }
             
+            _selectedUnit = null
             _eventQueue.add(fiber)
+            _player.useFuel(1)
             _turn = _turn + 1
             for (i in _projectiles.count-1..-1) {
               if (i == -1) break
