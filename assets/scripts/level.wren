@@ -248,16 +248,57 @@ class Projectile {
   }
 }
 
+class Event {
+  static DESTROY_TILE { 0 }
+}
+
 class Level {
-  construct new() {
+  construct new(template) {
+    _template = template
     _sprites = {}
+    _grid = []
+    _units = []
+    _projectiles = []
   }
+
+  template { _template }
 
   sprites { _sprites }
   sprites=(value){
     _sprites = value
   }
 
+  grid { _grid }
+  grid=(value) { _grid = (value)}
+
+  units { _units }
+  units=(value) { _units = (value)}
+
+  projectiles { _projectiles }
+  projectiles=(value) { _projectiles = (value)}
+
+  executeEvent(event) {
+    if (event["type"] == Event.DESTROY_TILE) {
+      var x = event["x"]
+      var y = event["y"]
+      destroyTile(x,y)
+    }
+  }
+
+  destroyTile(x,y) {
+    for (i in _grid.count-1..-1) {
+      if (i == -1) break
+
+      var tile = _grid[i]
+      if (tile.vec2 == Vec2.new(x,y)) {
+        _grid.removeAt(i)
+        return
+      }
+    }
+  }
+}
+
+class LevelTemplates {
   /* LEVEL TEMPLATE
   static levelX (sprites) {
     return {
@@ -318,7 +359,7 @@ class Level {
             0 : {
               "tiles" : [],
               "units" : [
-                Unit.new(0,"mc",8,1,animatedSprites["units"]["mc"],7,1),
+                Unit.new(0,"mc",8,1,animatedSprites["units"]["mc"],7,10),
                 Unit.new(1,"wisp",3,1,sprites["main"]["wisp"],1,0),
               ],
               "projectiles" : [
@@ -339,6 +380,50 @@ class Level {
                 Unit.new(0, "lantern", 5,1, sprites["main"]["lanternOn"], 1,0)
               ],
              },
+             1: {
+              "events": [
+                {
+                  "type": Event.DESTROY_TILE,
+                  "x": 3,
+                  "y": 2,
+                },
+                {
+                  "type": Event.DESTROY_TILE,
+                  "x": 3,
+                  "y": 1,
+                },
+                {
+                  "type": Event.DESTROY_TILE,
+                  "x": 3,
+                  "y": 0,
+                },
+                {
+                  "type": Event.DESTROY_TILE,
+                  "x": 4,
+                  "y": 0,
+                },
+                {
+                  "type": Event.DESTROY_TILE,
+                  "x": 5,
+                  "y": 0,
+                },
+                {
+                  "type": Event.DESTROY_TILE,
+                  "x": 6,
+                  "y": 0,
+                },
+                {
+                  "type": Event.DESTROY_TILE,
+                  "x": 7,
+                  "y": 0,
+                },
+                {
+                  "type": Event.DESTROY_TILE,
+                  "x": 8,
+                  "y": 0,
+                }
+              ],
+             }
           },
           "nextPhase": "trap"
         },
