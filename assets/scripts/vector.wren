@@ -15,6 +15,8 @@ class Vec2 {
   *(s) { Vec2.new(_x * s,   _y * s) }
   /(s) { Vec2.new(_x / s,   _y / s) }
   ==(other) { _x == other.x && _y == other.y}
+  >(other) { _x > other.x && y > other.y}
+  <(other) { _x < other.x && y < other.y}
 
   magnitude {
     return ( _x * _x + _y * _y).sqrt

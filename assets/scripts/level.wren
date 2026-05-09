@@ -1,4 +1,5 @@
 import "vector" for Vec2
+import "sprites" for Sprite2D, AnimatedSprite2D
 
 var TILE_SIZE = 64 
 
@@ -18,6 +19,10 @@ class Tile {
   effect { _effect }
   addEffect (value) {
     _effect.add(value)
+  }
+
+  vec2 { 
+    return Vec2.new(_x,_y)
   }
 
   static getTopSurfaceVectors(tile) {
@@ -69,13 +74,14 @@ class Tile {
 }
 
 class Unit {
-  construct new(id, name, x, y, sprite, hp) {
+  construct new(id, name, x, y, sprite, hp, speed) {
     _id = id
     _name = name
     _x = x
     _y = y
     _sprite = sprite
     _hp = hp
+    _speed = speed
   }
 
   id { _id }
@@ -88,7 +94,7 @@ class Unit {
   hp=(value) {
     _hp = value
   } 
-  speed { 5 } // temporarily set for testing
+  speed { _speed }
 
   vec2 {
     return Vec2.new(_x, _y)
@@ -97,6 +103,58 @@ class Unit {
   vec2=(value) {
     _x = value.x
     _y = value.y
+  }
+
+  // only return first frame if _sprite is an AnimatedSprite2D
+  draw(x,y,dt) {
+    if (_sprite.type == Map) {
+      var defaultAtlas = _sprite.values.toList[0]
+      var fiber = Fiber.new {
+        defaultAtlas.draw(x,y)
+        defaultAtlas.update(dt)
+      }
+      return fiber.call()
+    } else {
+      return _sprite.draw(x,y)
+    }
+  }
+
+  // draw and animate
+  draw(x,y, atlas, dt) {
+    if (_sprite.type == Map) {
+      var fiber = Fiber.new {
+        atlas.draw(x,y)
+        atlas.update(dt)
+      }
+      return fiber.call()
+    } else {
+      return _sprite.draw(x,y)
+    }
+  }
+
+  drawScaled(x,y,s, dt) {
+    if (_sprite.type == Map) {
+      var defaultAtlas = _sprite.values.toList[0]
+      var fiber = Fiber.new {
+        defaultAtlas.draw(x,y,s)
+        defaultAtlas.update(dt)
+      }
+      return fiber.call()
+    } else {
+      return _sprite.draw(x,y,s)
+    }
+  }
+
+  drawScaled(x,y, s, atlas, dt) {
+    if (_sprite.type == Map) {
+      var fiber = Fiber.new {
+        atlas.draw(x,y,s)
+        atlas.update(dt)
+      }
+      return fiber.call()
+    } else {
+      return _sprite.draw(x,y,s)
+    }
   }
 }
 
@@ -224,7 +282,10 @@ class Level {
       }
   }
   */
-  static level0 (sprites) {
+
+  // ALWAYS RESERVE MC's Unit id 0
+
+  static level0 (sprites, animatedSprites) {
     return {
       "init" : {
         "grid" : [
@@ -243,40 +304,86 @@ class Level {
           [7,0, sprites["main"]["snowTileBase"]],
           [7,1, sprites["main"]["snowTileBase"]],
           [7,2, sprites["main"]["snowTileBase"]],
+          [8,0, sprites["main"]["snowTileBase"]],
+          [8,1, sprites["main"]["snowTileBase"]],
+          [8,2, sprites["main"]["snowTileBase"]],
         ],
-        "units" : [],
+        "units" : [
+        ],
       },
       "phases": {
-        "1" : {
+        "start" : {
           "goal": [3,1],
+          "turnEvents": {
+            0 : {
+              "tiles" : [],
+              "units" : [
+                Unit.new(0,"mc",8,1,animatedSprites["units"]["mc"],7,1),
+                Unit.new(1,"wisp",3,1,sprites["main"]["wisp"],1,0),
+              ],
+              "projectiles" : [
+                Projectile.new(1, 7,3,7,-1,1,"NE",1,1,sprites["bullet"]["bullet"]),
+                Projectile.new(2,6,-1,6,3,1,"SW",1,2,sprites["bullet"]["bullet"]),
+                Projectile.new(3,5,3,5,-1,1,"NE",1,3,sprites["bullet"]["bullet"])
+              ]
+            }
+          },
+          "nextPhase": "getLantern" 
         },
-        "2" : {
-          "goal": [4,0],
-          "tiles" : [
-            Tile.new(0,4, sprites["main"]["snowTileLand"]),
-            Tile.new(1,4, sprites["main"]["snowTileBase"]),
-            Tile.new(2,4, sprites["main"]["snowTileBase"]),
-            Tile.new(3,4, sprites["main"]["snowTileBase"]),
-            Tile.new(4,4, sprites["main"]["snowTileBase"]),
-            Tile.new(4,3, sprites["main"]["snowTileBase"]),
-            Tile.new(4,3, sprites["main"]["snowTileBase"]),
-          ]
+        "getLantern" : {
+          "goal": [5,1],
+          "turnEvents": {
+             0: {
+              "tiles" : [],
+              "units": [
+                Unit.new(0, "lantern", 5,1, sprites["main"]["lanternOn"], 1,0)
+              ],
+             },
+          },
+          "nextPhase": "trap"
+        },
+        "trap" : {
+          "goal": [4,4],
+          "turnEvents": {
+            0: {
+            "tiles" : [
+              Tile.new(0,4, sprites["main"]["snowTileLand"]),
+              Tile.new(1,4, sprites["main"]["snowTileBase"]),
+              Tile.new(2,4, sprites["main"]["snowTileBase"]),
+              Tile.new(3,4, sprites["main"]["snowTileBase"]),
+              Tile.new(4,4, sprites["main"]["snowTileBase"]),
+              Tile.new(4,3, sprites["main"]["snowTileBase"]),
+              Tile.new(4,3, sprites["main"]["snowTileBase"]),
+            ],
+            "units": [
+            ],
+            "projectiles": [
+            ],
+            },
+          },
+          "nextPhase": "exit"
+        },
+        "exit" : {
+          "goal": [0,4],
+          "turnEvents": {
+              0: {
+            "tiles" : [
+            ],
+            "units": [
+            ],
+            "projectiles": [
+              Projectile.new(4,4,5,4,-1,1,"NE",1,1,sprites["bullet"]["bullet"]),
+              Projectile.new(5,3,5,3,3,1,"NE",1,2,sprites["bullet"]["bullet"]),
+              Projectile.new(6,2,5,2,3,1,"NE",1,3,sprites["bullet"]["bullet"]),
+              Projectile.new(7,1,5,1,3,1,"NE",1,3,sprites["bullet"]["bullet"]),
+              Projectile.new(8,1,3,1,5,1,"SW",1,4,sprites["bullet"]["bullet"]),
+              Projectile.new(9,2,3,2,5,1,"SW",1,4,sprites["bullet"]["bullet"]),
+              Projectile.new(10,3,3,3,5,1,"SW",1,5,sprites["bullet"]["bullet"]),
+              ]
+            },
+          },
         },
       },
-      "turnEvents": {
-        "1" : {
-          "tiles" : [
-          ],
-          "units" : [
-            Unit.new(1, "wisp", 7,1, sprites["main"]["wisp"], 5)
-          ],
-          "projectiles" : [
-            Projectile.new(1, 7,3,7,-1,1,"NE",1,1,sprites["bullet"]["bullet"]),
-            Projectile.new(2,6,-1,6,3,1,"SW",1,2,sprites["bullet"]["bullet"]),
-            Projectile.new(3,5,3,5,-1,1,"NE",1,4,sprites["bullet"]["bullet"])
-          ]
-        }
-      }
     }
   }
 }

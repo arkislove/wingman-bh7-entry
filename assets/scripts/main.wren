@@ -1,5 +1,5 @@
 import "shapes" for Draw
-import "sprites" for SpriteAtlas, Sprite2D
+import "sprites" for SpriteAtlas, Sprite2D, AnimatedSprite2D
 import "gfx" for Texture2D
 import "vector" for Vec2
 import "collision" for Collision2D
@@ -17,8 +17,21 @@ var GRID_OFFSET_Y = 200
 var Spritesheet = Texture2D.fromUri("http://localhost:3000/textures/spritesheet.png")
 var ArrowActive = Texture2D.fromUri("http://localhost:3000/textures/arrows/active.png")
 
+var MCIdleLeft = Texture2D.fromUri("http://localhost:3000/textures/units/mc/mc_idle_left.png")
+var MCIdleRight = Texture2D.fromUri("http://localhost:3000/textures/units/mc/mc_idle_right.png")
+var MCMovingLeft = Texture2D.fromUri("http://localhost:3000/textures/units/mc/mc_moving_left.png")
+var MCMovingRight = Texture2D.fromUri("http://localhost:3000/textures/units/mc/mc_moving_right.png")
+
 var Bullet = Texture2D.fromUri("http://localhost:3000/textures/bullets/bullet.png")
 var BulletMS = Texture2D.fromUri("http://localhost:3000/textures/bullets/bullet_ms.png")
+
+class Player {
+  construct new(startingFuel) {
+    _fuel = startingFuel
+  }
+
+  fuel { _fuel }
+}
 
 class Main {
   construct init() {
@@ -26,13 +39,19 @@ class Main {
     var mainAtlas = SpriteAtlas.fromGrid(Spritesheet, TILE_SIZE * 8, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE)
     var bulletAtlas = SpriteAtlas.fromGrid(Bullet, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
     var bulletMSAtlas = SpriteAtlas.fromGrid(BulletMS, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
+    var mcSpriteAtlas = {
+      "idleLeft": SpriteAtlas.fromGrid(MCIdleLeft, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
+      "idleRight": SpriteAtlas.fromGrid(MCIdleRight, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
+      "movingLeft": SpriteAtlas.fromGrid(MCMovingLeft, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
+      "movingRight": SpriteAtlas.fromGrid(MCMovingRight, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
+    }
     
     _sprites = {
       "main": {
         "snowTileE":        Sprite2D.new(mainAtlas, 0),
         "snowTileNE":       Sprite2D.new(mainAtlas, 1),
         "snowTileLand":     Sprite2D.new(mainAtlas, 2),
-        "redIndicator":     Sprite2D.new(mainAtlas, 3),
+        "redTile":          Sprite2D.new(mainAtlas, 3),
         "tree":             Sprite2D.new(mainAtlas, 4),
         "lanternOn":        Sprite2D.new(mainAtlas, 5),
         "wisp":             Sprite2D.new(mainAtlas, 6),
@@ -40,7 +59,7 @@ class Main {
         "snowTileS":        Sprite2D.new(mainAtlas, 8),
         "snowTileSW":       Sprite2D.new(mainAtlas, 9),
         "snowTileBase":     Sprite2D.new(mainAtlas, 10),
-        "greenIndicator":   Sprite2D.new(mainAtlas, 11),
+        "greenTile":        Sprite2D.new(mainAtlas, 11),
         "slimeLeft":        Sprite2D.new(mainAtlas, 12),
         "lanternOff":       Sprite2D.new(mainAtlas, 13),
         "emptyHpBar":       Sprite2D.new(mainAtlas, 14),
@@ -70,6 +89,17 @@ class Main {
       }
     }
 
+    _animatedSprites = {
+      "units" : {
+        "mc" : {
+          "idleLeft":     AnimatedSprite2D.new(mcSpriteAtlas["idleLeft"],8),
+          "idleRight":    AnimatedSprite2D.new(mcSpriteAtlas["idleRight"],8),
+          "movingLeft":   AnimatedSprite2D.new(mcSpriteAtlas["movingLeft"],8),
+          "movingRight":  AnimatedSprite2D.new(mcSpriteAtlas["movingRight"],8),
+        }
+      }
+    }
+
     _time = 0
 
     // grid tiles are the base
@@ -87,20 +117,23 @@ class Main {
     // event
     _eventQueue = []
 
-    _level = Level.level0(_sprites)
+    _level = Level.level0(_sprites, _animatedSprites)
 
     var grid = _level["grid"]
 
-    _turnEvents = _level["turnEvents"]
-    _turn = 0
-    _turnExecuted = []
-
-    _phases = _level["phases"]
-    _phase = 1
+    _phase = null
     _phasesCompleted = []
-    
-    _goalTile = Vec2.new(_phases["1"]["goal"][0], _phases["1"]["goal"][1])
+    _phases = _level["phases"]
+    _nextPhase = "start"
+    _phaseChanging = false
+    _p = null
 
+    _turn = 0
+    _turnEvents = []
+    _turnsExecuted = []
+
+    _goalTile = Vec2.new(0,0)
+    
     _gridSize = Vec2.new(0,0)
 
     for (entry in _level["init"]) {
@@ -133,21 +166,99 @@ class Main {
             var x = units[i][0]
             var y = units[i][1]
             var name = units[i][2]
-            var sprites = units[i][2]
+            var sprites = units[i][3]
+            var hp = units[i][4]
+            var speed = units[i][5]
 
-            var unit = Unit.new(0, name, x, y, sprites, 3)
+            var unit = Unit.new(0, name, x, y, sprites, hp, speed)
             _units.add(unit)
           }
         }
       }
     }
+
+    // player setup
+    _player = Player.new(7)
   }
 
   frame(dt) {
     _time = _time + dt * 0.5
 
-    if (_phase > _phases.count) {
-      System.print("YOU WIN")
+    if (Keyboard.isJustPressed(Key.ESCAPE)) {
+      _selectedUnit = null
+    }
+
+    if (_phase == null) {
+      if (Keyboard.isJustPressed(Key.ENTER)) {
+        _phase = _nextPhase
+      }
+    }
+
+    // level phases
+    if (!_phasesCompleted.contains(_phase)) {
+      _turnsExecuted = []
+      _turn = 0
+      for (entry in _phases) {
+        if (_phase == entry.key) {
+          _p = entry.value
+          _nextPhase = _p["nextPhase"]
+          _goalTile = Vec2.new(_p["goal"][0],_p["goal"][1])
+          
+        }
+      }
+      _phasesCompleted.add(_phase)
+      return
+    }
+
+    if (_p != null) {
+      if (!_turnsExecuted.contains(_turn)) {
+        for (event in _p["turnEvents"]) {
+          if (event.key == _turn) {
+            var object = event.value
+            for (o in object) {
+              if (o.key == "units") {
+                var units = o.value
+                if (units.count > 0) {
+                  for (i in 0..units.count-1) {
+                    var unit = units[i]
+                    System.print("unit %(unit.name) spawned at %(unit.vec2)")
+                    _units.add(units[i])
+                  }
+                }
+              }
+              if (o.key == "projectiles") {
+                var projectiles = o.value
+                if (projectiles.count > 0) {
+                  for (i in 0..projectiles.count-1) {
+                    _projectiles.add(projectiles[i])
+                  }
+                }
+              }
+              if (o.key == "tiles") {
+                var tiles = o.value
+                System.print(tiles)
+                if (tiles.count > 0) {
+                  for (i in 0..tiles.count-1) {
+                    _grid.add(tiles[i])
+                  }
+                  _grid.sort {|a, b| a.id < b.id }
+                }
+              }
+            }
+          }
+        }
+        _turnsExecuted.add(_turn)
+      }
+    }
+    
+    if (_eventQueue.count > 0) {
+      var current = _eventQueue[0]
+
+      current.call()
+      if (!current.isDone) {
+      } else {
+      _eventQueue.removeAt(0)
+      }
     }
 
     var pointer = Vec2.new(Mouse.x(), Mouse.y())
@@ -157,15 +268,26 @@ class Main {
     for (i in 0.._grid.count-1) {
       var tile = _grid[i]
 
+      // hide tile shenanigan
+      if (_units.count > 0) {
+        var mc = _units[0]
+        var fuel = _player.fuel
+        var mag = (mc.vec2-tile.vec2).magnitude
+        if (mag >= fuel/2) {
+          continue
+        }
+      }
+
       var x = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
       var y = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2
 
       tile.sprite.draw(x, y)
       var v = Tile.getTopSurfaceVectors(Vec2.new(x,y))
       if (Vec2.pointInQuad(pointer.x, pointer.y, v[0], v[1], v[2], v[3])) {
+        _sprites["main"]["greenTile"].draw(x,y)
         _sprites["main"]["yellowIndicator"].draw(x,y)
 
-        if (Mouse.isJustPressed(MouseButton.LEFT)) {
+        if (Mouse.isJustPressed(MouseButton.LEFT) || Keyboard.isJustPressed(Key.SPACE)) {
           System.print("Tile #%(tile.id): [%(tile.x),%(tile.y)]")
         }
       }
@@ -174,7 +296,7 @@ class Main {
     if (_selectedUnit != null) {
       var unit = _selectedUnit
 
-      unit.sprite.draw(0,600,128)
+      unit.drawScaled(128,600,128,dt)
 
       // draw green tiles
       for (i in 0.._greenTiles.count-1) {
@@ -196,12 +318,30 @@ class Main {
         var v = Tile.getTopSurfaceVectors(Vec2.new(x,y))       
 
         if (Vec2.pointInQuad(pointer.x, pointer.y, v[0], v[1], v[2], v[3])) {
+          // MC movement logic
           if (Mouse.isJustPressed(MouseButton.LEFT)) {
+
             _selectedUnit = null
-            unit.vec2 = Vec2.new(tile.x, tile.y)
+            var fiber = Fiber.new {
+              var target = Vec2.new(tile.x,tile.y)
+              if (unit.vec2 != target) {
+                unit.vec2 = Vec2.moveTowards(unit.vec2, target, unit.speed)    
+              }
+              Fiber.yield()
+            }
+            
+            _eventQueue.add(fiber)
+            _turn = _turn + 1
+            for (i in _projectiles.count-1..-1) {
+              if (i == -1) break
+
+              var projectile = _projectiles[i]
+
+              projectile.timer = projectile.timer - 1
+            }
           }
         } else {
-          _sprites["main"]["greenIndicator"].draw(x, y)
+          _sprites["main"]["greenTile"].draw(x, y)
         }
       }
 
@@ -239,10 +379,10 @@ class Main {
             var ptx = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
             var pty = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2
 
-            if (!(tile.x == projectile.x && tile.y == projectile.y)) _sprites["main"]["redIndicator"].draw(ptx,pty)
+            if (!(tile.x == projectile.x && tile.y == projectile.y)) _sprites["main"]["redTile"].draw(ptx,pty)
 
             if (j > 0 && j < pt.count - 1) {
-              tile = pt[j-1]
+              tile = pt[j]
               ptx = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
               pty = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2 - TILE_SIZE
 
@@ -291,13 +431,29 @@ class Main {
 
     // draw units
     if (_units.count > 0) {
-      for (i in 0.._units.count-1) {
+      for (i in _units.count-1..-1) {
+        if (i == -1) break
         var unit = _units[i]
 
-        //winning condition TODO: move somwhere else
-        var goal = _goalTile
-        if (unit.x == goal.x && unit.y == goal.y) {
-          _phase = _phase + 1
+        // mc conditions
+        if (unit.name == "mc") {
+          if (unit.x == _goalTile.x && unit.y == _goalTile.y) {
+            _phase = _nextPhase
+            _turn = 0
+            _turnExecuted = []
+          }
+          
+          for (j in _units.count-1..-1) {
+            if (j == -1) break
+            var u = _units[j]
+            
+            if (unit.vec2 == u.vec2) {
+              if (u.name == "wisp") {
+                _units.removeAt(j)
+                break
+              }
+            }
+          }
         }
 
         var x = GRID_OFFSET_X + (unit.x - unit.y) * TILE_SIZE
@@ -310,23 +466,20 @@ class Main {
         var v4 = Vec2.new(x, y + w)
 
         if (Vec2.pointInQuad(pointer.x, pointer.y, v1, v2, v3, v4)) {
-          unit.sprite.draw(x-3,y-3, TILE_SIZE+6)
+          unit.drawScaled(x-3,y-3, TILE_SIZE+6,dt)
           
-          if (Mouse.isJustPressed(MouseButton.LEFT) && _selectedUnit == null) {
-            _selectedUnit = unit
-          
-            // wisp
-            if (_selectedUnit.name == "wisp") {
+          if (Mouse.isJustPressed(MouseButton.LEFT)) {
+            _selectedUnit = unit            
+            // mc
+            if (_selectedUnit.name == "mc") {
               _greenTiles = Tile.getReachable(unit.x, unit.y, unit.speed)
             } else {
               _selectedUnit = null
             }
           }
         } else {
-          unit.sprite.draw(x,y)
-          if (Mouse.isJustPressed(MouseButton.LEFT)) {
-            _selectedUnit = null
-          }
+          unit.draw(x,y,dt)
+        
         }
 
         // hp
@@ -336,7 +489,7 @@ class Main {
             var totalWidth = unit.hp * size
             var tx = x - totalWidth/2 + (j * size)
             var ty = y - size
-            unit.sprite.draw(tx,ty,size)
+            if (!unit.sprite.type == Map) unit.sprite.draw(tx,ty,size)
           }
         } else {
           _units.remove(unit)
@@ -383,7 +536,7 @@ class Main {
               var fiber = Fiber.new {
                 var target = pt[step]
                 if (projectile.vec2 != target) {
-                  projectile.vec2 = Vec2.moveTowards(projectile.vec2, target, projectile.speed)    
+                  projectile.vec2 = Vec2.moveTowards(projectile.vec2, target, projectile.speed * 2)    
                 }
                 
                 // unit collision checkers
@@ -415,112 +568,24 @@ class Main {
         }
       }
     }
-    
-    var turn = "%(_turn)"
 
-    // end turner
-    if (Keyboard.isJustPressed(Key.SPACE)) {
-      _turn = _turn + 1
-
-      for (i in _projectiles.count-1..-1) {
-        if (i == -1) break
-
-        var projectile = _projectiles[i]
-
-        projectile.timer = projectile.timer - 1
+    // ALWAYS RESERVE FOR MC's Unit id to be 0
+    if (_player.fuel > 0) {
+      for (i in 0.._player.fuel) {
+        var x = 100 + i * 50
+        var y = 800
+        _sprites["main"]["wisp"].draw(x,y)
       }
     }
 
-    // execute turn events
-    if (!_turnExecuted.contains(turn)) {
-      for (entry in _turnEvents) {
-        if (turn == entry.key) {
-          for (value in entry.value) {
-            if (value.key == "units") {
-              var units = value.value
-              if (units.count > 0) {
-                for (i in 0..units.count-1) {
-                  _units.add(units[i])
-                }
-              }
-              
-            }
-            if (value.key == "projectiles") {
-              var projectiles = value.value
-              if (projectiles.count > 0) {
-                for (i in 0..projectiles.count-1) {
-                  _projectiles.add(projectiles[i])
-                }
-              }
-            }
-            if (value.key == "tiles") {
-              var tiles = value.value
-              if (tiles.count > 0) {
-                for (i in 0..tiles.count-1) {
-                  _grid.add(tiles[i])
-                }
-                _grid.sort {|a, b| a.id < b.id }
-              }
-            }
-          }
-          _turnExecuted.add(turn)
-          break
-        }
-      }
-    }
-
-    // level phases
-    var phase = "%(_phase)"
-    if (!_phasesCompleted.contains(phase)) {
-      for (entry in _phases) {
-        if (phase == entry.key) {
-          for (value in entry.value) {
-            if (value.key == "units") {
-              var units = value.value
-              if (units.count > 0) {
-                for (i in 0..units.count-1) {
-                  _units.add(units[i])
-                }
-              }
-              
-            }
-            if (value.key == "projectiles") {
-              var projectiles = value.value
-              if (projectiles.count > 0) {
-                for (i in 0..projectiles.count-1) {
-                  _projectiles.add(projectiles[i])
-                }
-              }
-            }
-            if (value.key == "tiles") {
-              var tiles = value.value
-              if (tiles.count > 0) {
-                for (i in 0..tiles.count-1) {
-                  _grid.add(tiles[i])
-                }
-                _grid.sort {|a, b| a.id < b.id }
-              }
-            }
-          }
-          _phasesCompleted.add(phase)
-          break
-        }
-      }
-    }
-
-    if (_eventQueue.count > 0) {
-      var current = _eventQueue[0]
-
-      current.call()
-      if (!current.isDone) {
-      } else {
-      _eventQueue.removeAt(0)
-      }
-    }
+    var x = GRID_OFFSET_X + (_goalTile.x - _goalTile.y) * TILE_SIZE
+    var y = GRID_OFFSET_Y + (_goalTile.x + _goalTile.y) * TILE_SIZE/2 - TILE_SIZE
+    _sprites["main"]["activeIndicator"].draw(x,y)
 
     if (_turn > 0) {
       for (i in 0.._turn-1) {
-        _sprites["bullet"]["bullet"].draw(100 + i * 50, 1000)    
+        _sprites["bullet"]["bullet"].draw(100 + i * 50, 1000)
+        _sprites["bullet"]["bullet"].draw(100 + i * 50, 1000)
       }
     }
   }
