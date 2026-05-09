@@ -16,6 +16,8 @@
     "input": "http://localhost:3000/scripts/input.wren",
     "vector": "http://localhost:3000/scripts/vector.wren",
     "collision": "http://localhost:3000/scripts/collision.wren",
-    "level": "http://localhost:3000/scripts/level.wren"
+    "level": "http://localhost:3000/scripts/level.wren",
+    "units": "http://localhost:3000/scripts/units.wren",
+    "projectiles": "http://localhost:3000/scripts/projectiles.wren"
   }
 }

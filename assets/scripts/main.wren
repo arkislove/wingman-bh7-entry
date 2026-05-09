@@ -4,7 +4,9 @@ import "gfx" for Texture2D
 import "vector" for Vec2
 import "collision" for Collision2D
 import "input" for Mouse, MouseButton, Keyboard, Key
-import "level" for Tile, Unit, OnHitEffect, Projectile, LevelTemplates, Level
+import "level" for Tile, LevelTemplates, Level
+import "units" for UnitType, Unit 
+import "projectiles" for Direction, ProjectileType, Projectile, ProjectileEffect
 
 var TILE_SIZE = 64 
 
@@ -42,14 +44,14 @@ class Player {
 class Main {
   construct init() {
     // sprite
-    var mainAtlas = SpriteAtlas.fromGrid(Spritesheet, TILE_SIZE * 8, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE)
-    var bulletAtlas = SpriteAtlas.fromGrid(Bullet, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
+    var mainAtlas =     SpriteAtlas.fromGrid(Spritesheet, TILE_SIZE * 8, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE)
+    var bulletAtlas =   SpriteAtlas.fromGrid(Bullet, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
     var bulletMSAtlas = SpriteAtlas.fromGrid(BulletMS, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
     var mcSpriteAtlas = {
-      "idleLeft": SpriteAtlas.fromGrid(MCIdleLeft, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
-      "idleRight": SpriteAtlas.fromGrid(MCIdleRight, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
-      "movingLeft": SpriteAtlas.fromGrid(MCMovingLeft, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
-      "movingRight": SpriteAtlas.fromGrid(MCMovingRight, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
+      "idleLeft":       SpriteAtlas.fromGrid(MCIdleLeft, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
+      "idleRight":      SpriteAtlas.fromGrid(MCIdleRight, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
+      "movingLeft":     SpriteAtlas.fromGrid(MCMovingLeft, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
+      "movingRight":    SpriteAtlas.fromGrid(MCMovingRight, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
     }
     
     _sprites = {
@@ -73,7 +75,7 @@ class Main {
         "snowTileN":        Sprite2D.new(mainAtlas, 16),
         "snowTileSE":       Sprite2D.new(mainAtlas, 17),
         "snowTileCracked":  Sprite2D.new(mainAtlas, 18),
-        "yellowIndicator":  Sprite2D.new(mainAtlas, 19),
+        "yellowBorder":     Sprite2D.new(mainAtlas, 19),
         "slimeRight":       Sprite2D.new(mainAtlas, 20),
         "lanternGlow":      Sprite2D.new(mainAtlas, 21),
         "arrowSE":          Sprite2D.new(mainAtlas, 22),
@@ -108,11 +110,11 @@ class Main {
 
     _time = 0
 
-    _level0 = LevelTemplates.level0(_sprites, _animatedSprites)
-    _level = Level.new(_level0)
+    var level0 = LevelTemplates.level0(_sprites, _animatedSprites)
+    _level = Level.new(level0, _sprites, _animatedSprites)
 
     // grid tiles are the base
-    var grid = _level0["grid"]
+    var grid = level0["grid"]
     _grid = _level.grid
 
     // units and projectiles are on top of the grid tiles
@@ -129,7 +131,7 @@ class Main {
 
     _phase = null
     _phasesCompleted = []
-    _phases = _level0["phases"]
+    _phases = level0["phases"]
     _nextPhase = "start"
     _phaseChanging = false
     _p = null
@@ -142,50 +144,14 @@ class Main {
     
     _gridSize = Vec2.new(0,0)
 
-    for (entry in _level0["init"]) {
-      if (entry.key == "grid") {
-        var grid = entry.value
-
-        if (grid.count > 0) {
-         for (i in 0..grid.count-1) {
-          var x = grid[i][0]
-          var y = grid[i][1]
-          var sprite = grid[i][2]
-
-          var id = x + x*y
-          var tile = Tile.new(x, y, sprite)
-
-          _grid.add(tile)
-
-          if (_gridSize.x < x || _gridSize.y < y) {
-            _gridSize = Vec2.new(x, y)
-          }
-        }
-        _grid.sort {|a, b| a.id < b.id }
-        }
-      }
-      if (entry.key == "units") {
-        var units = entry.value
-
-        if (units.count > 0 ) {
-          for (i in 0..units.count-1) {
-            var x = units[i][0]
-            var y = units[i][1]
-            var name = units[i][2]
-            var sprites = units[i][3]
-            var hp = units[i][4]
-            var speed = units[i][5]
-
-            var unit = Unit.new(0, name, x, y, sprites, hp, speed)
-            _units.add(unit)
-          }
-        }
-      }
+    for (event in level0["init"]) {
+      _level.executeEvent(event)
     }
 
     // player setup
-    _player = Player.new(7)
-    
+    _player = Player.new(7) 
+
+    _history = []
   }
 
   frame(dt) {
@@ -201,7 +167,7 @@ class Main {
       }
     }
 
-    // level phases
+    // PHASE ENTRY
     if (!_phasesCompleted.contains(_phase)) {
       _turnsExecuted = []
       _turn = 0
@@ -219,17 +185,19 @@ class Main {
     if (_p != null) {
       if (!_turnsExecuted.contains(_turn)) {
         // PUT TURNED BASED EVENTS HERE
-        for (i in _projectiles.count-1..-1) {
-          if (i == -1) break
+        System.print("Phase: %(_phase), Turn %(_turn)")
+        System.print("History: %(_history)")
 
-          var projectile = _projectiles[i]
-          projectile.timer = projectile.timer - 1
+        if (_turn != 0) {
+          _eventQueue.add(Fiber.new{
+            _level.projectilesWaitTimeDown()
+          })
         }
         
         for (i in _units.count-1..-1) {
           if (i == -1) break
           var unit = _units[i]
-          if (unit.name == "lantern") {
+          if (unit.type == UnitType.LANTERN) {
             var mc = _units[0]
             var dist = (mc.vec2 - unit.vec2).magnitude 
             if (dist <= 1) {
@@ -237,48 +205,18 @@ class Main {
             }
           }
         }
-        //
-        for (event in _p["turnEvents"]) {
-          if (event.key == _turn) {
-            var object = event.value
-            for (o in object) {
-              if (o.key == "events") {
-                var events = o.value
-                if (events.count > 0) {
-                  for (i in 0..events.count-1) {
-                    var event = events[i]
+        _selectedUnit = null
+        // END
 
-                    _level.executeEvent(event)
-                  }
-                }
-              }
-              if (o.key == "units") {
-                var units = o.value
-                if (units.count > 0) {
-                  for (i in 0..units.count-1) {
-                    var unit = units[i]
-                    System.print("unit %(unit.name) spawned at %(unit.vec2)")
-                    _units.add(units[i])
-                  }
-                }
-              }
-              if (o.key == "projectiles") {
-                var projectiles = o.value
-                if (projectiles.count > 0) {
-                  for (i in 0..projectiles.count-1) {
-                    _projectiles.add(projectiles[i])
-                  }
-                }
-              }
-              if (o.key == "tiles") {
-                var tiles = o.value
-                System.print(tiles)
-                if (tiles.count > 0) {
-                  for (i in 0..tiles.count-1) {
-                    _grid.add(tiles[i])
-                  }
-                  _grid.sort {|a, b| a.id < b.id }
-                }
+        for (turnEvents in _p["turnEvents"]) {
+          if (turnEvents.key == _turn) {
+            var events = turnEvents.value
+            if (events.count > 0) {
+              for (i in 0..events.count-1) {
+                var event = events[i]
+
+                _level.executeEvent(event)
+                System.print("Event: %(event["type"])")
               }
             }
           }
@@ -293,7 +231,8 @@ class Main {
       current.call()
       if (!current.isDone) {
       } else {
-      _eventQueue.removeAt(0)
+        _history.add(_eventQueue)
+        _eventQueue.removeAt(0)
       }
     }
 
@@ -317,15 +256,16 @@ class Main {
       var x = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
       var y = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2
 
-      tile.sprite.draw(x, y)
       var v = Tile.getTopSurfaceVectors(Vec2.new(x,y))
       if (Vec2.pointInQuad(pointer.x, pointer.y, v[0], v[1], v[2], v[3])) {
-        _sprites["main"]["greenTile"].draw(x,y)
-        _sprites["main"]["yellowIndicator"].draw(x,y)
+        tile.sprite.draw(x, y+5)
+        _sprites["main"]["yellowBorder"].draw(x,y-1)
 
         if (Mouse.isJustPressed(MouseButton.LEFT) || Keyboard.isJustPressed(Key.SPACE)) {
           System.print("Tile #%(tile.id): [%(tile.x),%(tile.y)]")
         }
+      } else {
+        tile.sprite.draw(x, y)
       }
     }
 
@@ -361,7 +301,6 @@ class Main {
               if (unit.vec2 != target) {
                 unit.vec2 = Vec2.moveTowards(unit.vec2, target, unit.speed)    
               }
-              Fiber.yield()
             }
             
             _selectedUnit = null
@@ -370,7 +309,7 @@ class Main {
             for (i in _units.count-1..-1) {
               if (i == -1) break
               var unit = _units[i]
-              if (unit.name == "lantern") {
+              if (unit.type == UnitType.LANTERN) {
                 var mc = _units[0]
                 var dist = (mc.vec2 - unit.vec2).magnitude 
                 if (dist <= 1) {
@@ -382,12 +321,12 @@ class Main {
             }
             _turn = _turn + 1
           }
+          _sprites["main"]["greenTile"].draw(x,y+5)
+          _sprites["main"]["yellowBorder"].draw(x,y)
         } else {
-          _sprites["main"]["greenTile"].draw(x, y)
+          _sprites["main"]["greenTile"].draw(x,y)
         }
       }
-
-      // draw active arrow
     }
 
     // draw red tiles
@@ -398,8 +337,8 @@ class Main {
         var skip = false
         
         var projectile = _projectiles[i]
-
-        var pt = projectile.projectTiles
+        
+        var pt = projectile.line
         if (pt.count == null) {
           _projectiles.removeAt(i)
           continue
@@ -421,50 +360,10 @@ class Main {
             var ptx = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
             var pty = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2
 
-            if (!(tile.x == projectile.x && tile.y == projectile.y)) _sprites["main"]["redTile"].draw(ptx,pty)
-
-            if (j > 0 && j < pt.count - 1) {
-              tile = pt[j]
-              ptx = GRID_OFFSET_X + (tile.x - tile.y) * TILE_SIZE
-              pty = GRID_OFFSET_Y + (tile.x + tile.y) * TILE_SIZE/2 - TILE_SIZE
-
-              var nextTile = pt[j]
-
-              var tx = GRID_OFFSET_X + (nextTile.x - nextTile.y) * TILE_SIZE
-              var ty = GRID_OFFSET_Y + (nextTile.x + nextTile.y) * TILE_SIZE/2 - TILE_SIZE
-
-              var start = Vec2.new(ptx, pty)
-              var end   = Vec2.new(tx, ty - TILE_SIZE)
-
-              var dir = (end - start)
-              var dist = dir.magnitude
-              var norm = dir / dist
-
-              var speed = 64
-              var spacing = 64
-              var offset = (_time * speed) % spacing
-
-              for (k in 0..(dist / spacing)) {
-                var t = k * spacing + offset
-                if (t > dist) continue
-
-                var pos = start + norm * t
-
-                if (projectile.direction == "NW") {
-                  _sprites["main"]["arrowNW"].draw(tx,ty)
-                }
-                if (projectile.direction == "NE") {
-                  _sprites["main"]["arrowNE"].draw(tx,ty)
-                }
-                if (projectile.direction == "SW") {
-                  _sprites["main"]["arrowSW"].draw(tx,ty)
-                }
-                if (projectile.direction == "SE") {
-                  _sprites["main"]["arrowSE"].draw(tx,ty)
-                }
-              }
+            if (!(tile.x == projectile.x && tile.y == projectile.y)) {
+              _sprites["main"]["redTile"].draw(ptx,pty)
             }
-            
+
             if (skip) break
           }
         }
@@ -477,24 +376,12 @@ class Main {
         if (i == -1) break
         var unit = _units[i]
 
-        // mc conditions
-        if (unit.name == "mc") {
+        // MC conditions
+        if (unit.type == UnitType.MC) {
           if (unit.x == _goalTile.x && unit.y == _goalTile.y) {
             _phase = _nextPhase
             _turn = 0
             _turnExecuted = []
-          }
-          
-          for (j in _units.count-1..-1) {
-            if (j == -1) break
-            var u = _units[j]
-            
-            if (unit.vec2 == u.vec2) {
-              if (u.name == "wisp") {
-                _units.removeAt(j)
-                break
-              }
-            }
           }
         }
 
@@ -513,7 +400,7 @@ class Main {
           if (Mouse.isJustPressed(MouseButton.LEFT)) {
             _selectedUnit = unit            
             // mc
-            if (_selectedUnit.name == "mc") {
+            if (_selectedUnit.type == UnitType.MC) {
               _greenTiles = Tile.getReachable(unit.x, unit.y, unit.speed)
             } else {
               _selectedUnit = null
@@ -521,7 +408,6 @@ class Main {
           }
         } else {
           unit.draw(x,y,dt)
-        
         }
 
         // hp
@@ -550,7 +436,7 @@ class Main {
           continue
         }
 
-        var pt = projectile.projectTiles
+        var pt = projectile.line
         if (pt.count == null) {
           _projectiles.removeAt(i)
           continue
@@ -562,13 +448,13 @@ class Main {
         projectile.sprite.draw(x,y)
         if (pt.count > 0) {
 
-          if (projectile.timer > 0) {
-            for (j in 1..projectile.timer) {
+          if (projectile.waitTime > 0) {
+            for (j in 1..projectile.waitTime) {
               var size = 16
-              var totalWidth = projectile.timer * size
+              var totalWidth = projectile.waitTime * size
               var tx = x - totalWidth/2 + (j * size)
               var ty = y - size
-              if (Tile.isOutOfBounds(projectile)) {
+              if (!_level.isOnATile(projectile)) {
                 projectile.sprite.draw(tx,ty,32)
               }
             }
@@ -588,24 +474,27 @@ class Main {
                   var unit = _units[u]
                   if (projectile.vec2 == unit.vec2) {
                     System.print("%(projectile) %(i) hit unit %(u): %(unit.vec2)")
-                    if (projectile.onHitEffects.count > 0) {
-                      for (i in 0..projectile.onHitEffects.count-1) {
-                        var effect = projectile.onHitEffects[i]
+                    if (projectile.effects.count > 0) {
+                      for (i in 0..projectile.effects.count-1) {
+                        var effect = projectile.effects[i]
+                        
+                        if (effect == ProjectileEffect.DEAL_DAMAGE) {
+                          _eventQueue.add(Fiber.new {
+                            _player.useFuel(1)
+                          })
+                        }
+                        if (effect == ProjectileEffect.KNOCKBACK) {
 
-                        effect.play(unit,projectile)
+                        }
                       }
                     }
-                    
-                    unit.hp = unit.hp - projectile.dmg
                     _projectiles.removeAt(i)
-                    Fiber.yield()
                   }
                 }
-                Fiber.yield()
               }
               _eventQueue.add(fiber)
             }
-            projectile.timer = 1
+            projectile.waitTime = 1
           }
         }
       }
