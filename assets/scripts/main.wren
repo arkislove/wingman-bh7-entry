@@ -1,12 +1,13 @@
 import "shapes" for Draw
 import "sprites" for SpriteAtlas, Sprite2D, AnimatedSprite2D
 import "gfx" for Texture2D
-import "vector" for Vec2
+import "vector" for Vec2, Direction
 import "collision" for Collision2D
 import "input" for Mouse, MouseButton, Keyboard, Key
 import "level" for Tile, LevelTemplates, Level
 import "units" for UnitType, Unit 
-import "projectiles" for Direction, ProjectileType, Projectile, ProjectileEffect
+import "projectiles" for  ProjectileType, Projectile, ProjectileEffect
+import "text" for TextMesh
 
 var TILE_SIZE = 64 
 
@@ -24,8 +25,12 @@ var MCIdleRight = Texture2D.fromUri("http://localhost:3000/textures/units/mc/mc_
 var MCMovingLeft = Texture2D.fromUri("http://localhost:3000/textures/units/mc/mc_moving_left.png")
 var MCMovingRight = Texture2D.fromUri("http://localhost:3000/textures/units/mc/mc_moving_right.png")
 
-var Bullet = Texture2D.fromUri("http://localhost:3000/textures/bullets/bullet.png")
-var BulletMS = Texture2D.fromUri("http://localhost:3000/textures/bullets/bullet_ms.png")
+var BulletNE = Texture2D.fromUri("http://localhost:3000/textures/projectiles/bullet/bullet_spritesheet_NE.png")
+var BulletNW = Texture2D.fromUri("http://localhost:3000/textures/projectiles/bullet/bullet_spritesheet_NW.png")
+var BulletSE = Texture2D.fromUri("http://localhost:3000/textures/projectiles/bullet/bullet_spritesheet_SE.png")
+var BulletSW = Texture2D.fromUri("http://localhost:3000/textures/projectiles/bullet/bullet_spritesheet_SW.png")
+
+var DangerIcon = Texture2D.fromUri("http://localhost:3000/textures/icons/danger_extreme.png") 
 
 class Player {
   construct new(startingFuel) {
@@ -43,15 +48,26 @@ class Player {
 
 class Main {
   construct init() {
+    var w = TILE_SIZE
     // sprite
-    var mainAtlas =     SpriteAtlas.fromGrid(Spritesheet, TILE_SIZE * 8, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE)
-    var bulletAtlas =   SpriteAtlas.fromGrid(Bullet, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
-    var bulletMSAtlas = SpriteAtlas.fromGrid(BulletMS, TILE_SIZE, TILE_SIZE, TILE_SIZE, TILE_SIZE)
+    var mainAtlas =     SpriteAtlas.fromGrid(Spritesheet, w * 8, w * 4, w, w)
+
     var mcSpriteAtlas = {
-      "idleLeft":       SpriteAtlas.fromGrid(MCIdleLeft, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
-      "idleRight":      SpriteAtlas.fromGrid(MCIdleRight, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
-      "movingLeft":     SpriteAtlas.fromGrid(MCMovingLeft, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
-      "movingRight":    SpriteAtlas.fromGrid(MCMovingRight, TILE_SIZE * 4, TILE_SIZE, TILE_SIZE, TILE_SIZE),
+      "idleLeft":     SpriteAtlas.fromGrid(MCIdleLeft, w * 4, w, w, w),
+      "idleRight":    SpriteAtlas.fromGrid(MCIdleRight, w * 4, w, w, w),
+      "movingLeft":   SpriteAtlas.fromGrid(MCMovingLeft, w * 4, w, w, w),
+      "movingRight":  SpriteAtlas.fromGrid(MCMovingRight, w * 4, w, w, w),
+    }
+
+    var bulletAtlas = {
+      "NE": SpriteAtlas.fromGrid(BulletNE, w * 4, w, w, w),
+      "NW": SpriteAtlas.fromGrid(BulletNW, w * 4, w, w, w),
+      "SE": SpriteAtlas.fromGrid(BulletSE, w * 4, w, w, w),
+      "SW": SpriteAtlas.fromGrid(BulletSW, w * 4, w, w, w),
+    }
+
+    var dangerAtlas = {
+      "default": SpriteAtlas.fromGrid(DangerIcon, w * 4, w, w, w)
     }
     
     _sprites = {
@@ -88,12 +104,6 @@ class Main {
         "lanternBroken":    Sprite2D.new(mainAtlas, 29),
         "arrowNW":          Sprite2D.new(mainAtlas, 30),
         "arrowSW":          Sprite2D.new(mainAtlas, 31),
-      },
-      "bullet" : {
-        "bullet": Sprite2D.new(bulletAtlas, 0)
-      },
-      "bulletMS" : {
-        "bulletMS": Sprite2D.new(bulletMSAtlas, 0)
       }
     }
 
@@ -105,6 +115,17 @@ class Main {
           "movingLeft":   AnimatedSprite2D.new(mcSpriteAtlas["movingLeft"],8),
           "movingRight":  AnimatedSprite2D.new(mcSpriteAtlas["movingRight"],8),
         }
+      },
+      "projectiles": {
+        "bullet": {
+          "NE": AnimatedSprite2D.new(bulletAtlas["NE"],8),
+          "NW": AnimatedSprite2D.new(bulletAtlas["NW"],8),
+          "SE": AnimatedSprite2D.new(bulletAtlas["SE"],8),
+          "SW": AnimatedSprite2D.new(bulletAtlas["SW"],8),
+        }
+      },
+      "icons": {
+        "danger": AnimatedSprite2D.new(dangerAtlas["default"],1)
       }
     }
 
@@ -120,6 +141,7 @@ class Main {
     // units and projectiles are on top of the grid tiles
     _units = _level.units
     _projectiles = _level.projectiles
+    _warnings = _level.warnings
 
     // green = unit possible tiles
     // red = enemy "threat" tiles
@@ -130,7 +152,7 @@ class Main {
     _eventQueue = []
 
     _phase = null
-    _phasesCompleted = []
+    _phasesInitialized = []
     _phases = level0["phases"]
     _nextPhase = "start"
     _phaseChanging = false
@@ -164,47 +186,45 @@ class Main {
     if (_phase == null) {
       if (Keyboard.isJustPressed(Key.ENTER)) {
         _phase = _nextPhase
+        _phaseChanging = true
       }
     }
 
-    // PHASE ENTRY
-    if (!_phasesCompleted.contains(_phase)) {
-      _turnsExecuted = []
-      _turn = 0
-      for (entry in _phases) {
-        if (_phase == entry.key) {
-          _p = entry.value
-          _nextPhase = _p["nextPhase"]
-          _goalTile = Vec2.new(_p["goal"][0],_p["goal"][1]) 
-        }
-      }
-      _phasesCompleted.add(_phase)
-      return
-    }
-
-    if (_p != null) {
+ // PHASE ENTRY
+    if (_p != null && !_phaseChanging) {
       if (!_turnsExecuted.contains(_turn)) {
-        // PUT TURNED BASED EVENTS HERE
+        // PUT PER-TURN EVENTS HERE
         System.print("Phase: %(_phase), Turn %(_turn)")
-        System.print("History: %(_history)")
 
         if (_turn != 0) {
           _eventQueue.add(Fiber.new{
             _level.projectilesWaitTimeDown()
           })
-        }
-        
-        for (i in _units.count-1..-1) {
-          if (i == -1) break
-          var unit = _units[i]
-          if (unit.type == UnitType.LANTERN) {
-            var mc = _units[0]
-            var dist = (mc.vec2 - unit.vec2).magnitude 
-            if (dist <= 1) {
-              _player.addFuel(1)
+
+          for (i in _warnings.count-1..-1) {
+            if (i == -1) break
+
+            var warning = _warnings[i]
+            warning.duration = warning.duration - 1
+            if (warning.duration <= 0) {
+              _warnings.removeAt(i)
+            }
+          }
+          
+          for (i in _units.count-1..-1) {
+            if (i == -1) break
+            var unit = _units[i]
+            if (unit.type == UnitType.LANTERN) {
+              var mc = _units[0]
+              var dist = (mc.vec2 - unit.vec2).magnitude 
+              if (dist <= 1) {
+                _player.addFuel(1)
+              }
             }
           }
         }
+
+       
         _selectedUnit = null
         // END
 
@@ -216,12 +236,35 @@ class Main {
                 var event = events[i]
 
                 _level.executeEvent(event)
-                System.print("Event: %(event["type"])")
               }
             }
           }
         }
         _turnsExecuted.add(_turn)
+      }
+    }
+
+    if (!_phasesInitialized.contains(_phase)) {
+      _turnsExecuted = []
+      _turn = 0
+      for (entry in _phases) {
+        if (_phase == entry.key) {
+          _p = entry.value
+          _nextPhase = _p["nextPhase"]
+          _goalTile = Vec2.new(_p["goal"][0],_p["goal"][1]) 
+        }
+      }
+      _phaseChanging = false
+      _phasesInitialized.add(_phase)
+    }
+
+    // phase completion check
+    if (_units.count > 0) {
+      var mc = _units[0]
+
+      if (mc.vec2 == _goalTile) {
+        _phase = _nextPhase
+        _phaseChanging = true
       }
     }
     
@@ -275,7 +318,9 @@ class Main {
       unit.drawScaled(128,600,128,dt)
 
       // draw green tiles
-      for (i in 0.._greenTiles.count-1) {
+      for (i in _greenTiles.count-1..-1) {
+        if (i == -1) break
+        
         var tile = _greenTiles[i]
 
         var skip = false
@@ -296,29 +341,25 @@ class Main {
         if (Vec2.pointInQuad(pointer.x, pointer.y, v[0], v[1], v[2], v[3])) {
           // MC movement logic
           if (Mouse.isJustPressed(MouseButton.LEFT)) {
+            var targetVec = Vec2.new(tile.x,tile.y)
             var fiber = Fiber.new {
-              var target = Vec2.new(tile.x,tile.y)
-              if (unit.vec2 != target) {
-                unit.vec2 = Vec2.moveTowards(unit.vec2, target, unit.speed)    
+              if (unit.vec2 != targetVec) {
+                unit.vec2 = Vec2.moveTowards(unit.vec2, targetVec, unit.speed)    
+              }
+
+              if (unit.type == UnitType.MC) {
+                unit.setDirection(Vec2.getDirection(unit.vec2,targetVec))
+                if (unit.direction == Direction.NW || unit.direction == Direction.SW) {
+                  unit.setSprite(unit.sprite["movingLeft"])
+                }
+                if (unit.direction == Direction.NE || unit.direction == Direction.SE) {
+                  unit.setSprite(unit.sprite["movingRight"])
+                }
               }
             }
             
-            _selectedUnit = null
             _eventQueue.add(fiber)
-            var mc = _units[0]
-            for (i in _units.count-1..-1) {
-              if (i == -1) break
-              var unit = _units[i]
-              if (unit.type == UnitType.LANTERN) {
-                var mc = _units[0]
-                var dist = (mc.vec2 - unit.vec2).magnitude 
-                if (dist <= 1) {
-                  _player.addFuel(1)
-                }
-              } else {
-                _player.useFuel(1)
-              }
-            }
+            _selectedUnit = null
             _turn = _turn + 1
           }
           _sprites["main"]["greenTile"].draw(x,y+5)
@@ -376,15 +417,6 @@ class Main {
         if (i == -1) break
         var unit = _units[i]
 
-        // MC conditions
-        if (unit.type == UnitType.MC) {
-          if (unit.x == _goalTile.x && unit.y == _goalTile.y) {
-            _phase = _nextPhase
-            _turn = 0
-            _turnExecuted = []
-          }
-        }
-
         var x = GRID_OFFSET_X + (unit.x - unit.y) * TILE_SIZE
         var y = GRID_OFFSET_Y + (unit.x + unit.y) * TILE_SIZE/2 - TILE_SIZE
 
@@ -395,32 +427,39 @@ class Main {
         var v4 = Vec2.new(x, y + w)
 
         if (Vec2.pointInQuad(pointer.x, pointer.y, v1, v2, v3, v4)) {
-          unit.drawScaled(x-3,y-3, TILE_SIZE+6,dt)
-          
+          if (unit.currentSprite.type == Sprite2D) {
+            unit.sprite.draw(x-3,y-3,TILE_SIZE+3)
+          }
+          if (unit.currentSprite.type == AnimatedSprite2D) {
+            unit.currentSprite.draw(x-3,y-3,TILE_SIZE+3)
+            unit.currentSprite.update(dt)
+          }
+
           if (Mouse.isJustPressed(MouseButton.LEFT)) {
             _selectedUnit = unit            
             // mc
             if (_selectedUnit.type == UnitType.MC) {
-              _greenTiles = Tile.getReachable(unit.x, unit.y, unit.speed)
+              _greenTiles = _level.getReachable(unit.x, unit.y, unit.speed)
             } else {
               _selectedUnit = null
             }
           }
         } else {
-          unit.draw(x,y,dt)
-        }
-
-        // hp
-        if (unit.hp > 0) {
-          for (j in 1..unit.hp) {
-            var size = 16
-            var totalWidth = unit.hp * size
-            var tx = x - totalWidth/2 + (j * size)
-            var ty = y - size
-            if (!unit.sprite.type == Map) unit.sprite.draw(tx,ty,size)
+          if (unit.type == UnitType.MC) {
+            if (unit.direction == Direction.NW || unit.direction == Direction.SW) {
+              unit.setSprite(unit.sprite["idleLeft"])
+            }
+            if (unit.direction == Direction.NE || unit.direction == Direction.SE) {
+              unit.setSprite(unit.sprite["idleRight"])
+            }
           }
-        } else {
-          _units.remove(unit)
+          if (unit.currentSprite.type == Sprite2D) {
+            unit.currentSprite.draw(x,y)
+          } 
+          if (unit.currentSprite.type == AnimatedSprite2D) {
+            unit.currentSprite.draw(x,y)
+            unit.currentSprite.update(dt)
+          }
         }
       }
     }
@@ -445,38 +484,50 @@ class Main {
         var x = GRID_OFFSET_X + (projectile.x - projectile.y) * TILE_SIZE
         var y = GRID_OFFSET_Y + (projectile.x + projectile.y) * TILE_SIZE / 2 - TILE_SIZE
         
-        projectile.sprite.draw(x,y)
-        if (pt.count > 0) {
+        if (projectile.currentSprite.type == AnimatedSprite2D) {
+          var dir = Vec2.getDirection(projectile.vec2,projectile.targetVec2)
+          if (dir == Direction.NW) projectile.setSprite(projectile.sprite["NW"])
+          if (dir == Direction.NE) projectile.setSprite(projectile.sprite["NE"])
+          if (dir == Direction.SW) projectile.setSprite(projectile.sprite["SW"])
+          if (dir == Direction.SE) projectile.setSprite(projectile.sprite["SE"])
 
+          var sprite = projectile.currentSprite
+          sprite.draw(x,y)
+          sprite.update(dt)
+        } else {
+          projectile.sprite.draw(x,y)
+        }
+        TextMesh.draw(x-4,y, "%(projectile.id)", 16, 0xFFFFFFFF)
+
+        
+        if (pt.count > 0) {
           if (projectile.waitTime > 0) {
             for (j in 1..projectile.waitTime) {
-              var size = 16
-              var totalWidth = projectile.waitTime * size
-              var tx = x - totalWidth/2 + (j * size)
-              var ty = y - size
               if (!_level.isOnATile(projectile)) {
-                projectile.sprite.draw(tx,ty,32)
+                TextMesh.draw(x-4,y - 32, "%(projectile.waitTime)", 16, 0xFFFFFFFF)
               }
             }
           } else {
-            var steps = (projectile.speed) % pt.count
-            for (step in 1..steps) {
-              var fiber = Fiber.new {
-                var target = pt[step]
-                if (projectile.vec2 != target) {
-                  projectile.vec2 = Vec2.moveTowards(projectile.vec2, target, projectile.speed * 2)    
-                }
+            var target = pt[1]
+            _eventQueue.add(Fiber.new {
+              while ((projectile.vec2 - target).magnitude > 0){
+                if (projectile.vec2 == target) break
+                var speed = projectile.speed * dt
+                projectile.vec2 = Vec2.moveTowards(projectile.vec2, target, speed)
                 
-                // unit collision checkers
-                for (u in _units.count-1..-1) {
-                  if (u == -1) break
-                  
-                  var unit = _units[u]
-                  if (projectile.vec2 == unit.vec2) {
-                    System.print("%(projectile) %(i) hit unit %(u): %(unit.vec2)")
+              }
+              
+              // unit collision checkers
+              for (u in _units.count-1..-1) {
+                if (u == -1) break
+                
+                var unit = _units[u]
+                if (projectile.vec2 == unit.vec2) {
+                  System.print("%(projectile) %(i) hit unit %(u): %(unit.vec2)")
+                  if (unit.type == UnitType.MC) {
                     if (projectile.effects.count > 0) {
-                      for (i in 0..projectile.effects.count-1) {
-                        var effect = projectile.effects[i]
+                      for (e in 0..projectile.effects.count-1) {
+                        var effect = projectile.effects[e]
                         
                         if (effect == ProjectileEffect.DEAL_DAMAGE) {
                           _eventQueue.add(Fiber.new {
@@ -484,23 +535,41 @@ class Main {
                           })
                         }
                         if (effect == ProjectileEffect.KNOCKBACK) {
-
+                          var dir = Vec2.getDirection(projectile.vec2, projectile.targetVec2)
+                          var uv = unit.vec2
+                          var tv = null
+                          if (dir == Direction.NW) tv = uv + Vec2.new(-1,0)
+                          if (dir == Direction.NE) tv = uv + Vec2.new(0,-1)
+                          if (dir == Direction.SW) tv = uv + Vec2.new(0,1)
+                          if (dir == Direction.SE) tv = uv + Vec2.new(1,0)
+                          _eventQueue.add(Fiber.new{
+                            unit.vec2 = Vec2.moveTowards(uv, tv, 1)
+                            Fiber.yield()
+                          })
                         }
                       }
                     }
-                    _projectiles.removeAt(i)
                   }
+                  _projectiles.removeAt(i)
                 }
               }
-              _eventQueue.add(fiber)
-            }
-            projectile.waitTime = 1
+            })
           }
         }
       }
     }
 
-    // ALWAYS RESERVE FOR MC's Unit id to be 0
+    // draw warning
+    for (i in _warnings.count-1..-1) {
+      if (i == -1) break
+
+      var x = GRID_OFFSET_X + (_warnings[i].x - _warnings[i].y) * TILE_SIZE
+      var y = GRID_OFFSET_Y + (_warnings[i].x + _warnings[i].y) * TILE_SIZE/2 - TILE_SIZE
+      _animatedSprites["icons"]["danger"].draw(x,y)
+      _animatedSprites["icons"]["danger"].update(dt)
+    }
+
+    // draw fuel count
     if (_player.fuel > 0) {
       for (i in 0.._player.fuel) {
         var x = 100 + i * 50
@@ -512,12 +581,5 @@ class Main {
     var x = GRID_OFFSET_X + (_goalTile.x - _goalTile.y) * TILE_SIZE
     var y = GRID_OFFSET_Y + (_goalTile.x + _goalTile.y) * TILE_SIZE/2 - TILE_SIZE
     _sprites["main"]["activeIndicator"].draw(x,y)
-
-    if (_turn > 0) {
-      for (i in 0.._turn-1) {
-        _sprites["bullet"]["bullet"].draw(100 + i * 50, 1000)
-        _sprites["bullet"]["bullet"].draw(100 + i * 50, 1000)
-      }
-    }
   }
 }

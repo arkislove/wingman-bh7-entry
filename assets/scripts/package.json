@@ -18,6 +18,7 @@
     "collision": "http://localhost:3000/scripts/collision.wren",
     "level": "http://localhost:3000/scripts/level.wren",
     "units": "http://localhost:3000/scripts/units.wren",
-    "projectiles": "http://localhost:3000/scripts/projectiles.wren"
+    "projectiles": "http://localhost:3000/scripts/projectiles.wren",
+    "text": "http://localhost:3000/scripts/text.wren"
   }
 }
