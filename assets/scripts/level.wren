@@ -39,39 +39,20 @@ class Tile {
   static isOutOfBounds(tile) {
     return tile.x < 0 || tile.y < 0
   }
+}
 
-  static getReachable(startX, startY, speed) {
-    var queue = [[startX, startY, 0]]
-    var visited = {}
-    var reachable = []
+class Warning {
+  construct new(x,y,duration) {
+    _x = x
+    _y = y
+    _duration = duration
+  }
 
-    while (queue.count > 0) {
-        var node = queue.removeAt(0)
-        var x = node[0]
-        var y = node[1]
-        var cost = node[2]
-
-        var key = "%(x),%(y)"
-
-        if (isOutOfBounds(Vec2.new(x,y))) continue
-        if (visited.containsKey(key)) continue
-        visited[key] = true
-
-        if (cost > speed) continue
-
-        reachable.add(Vec2.new(x, y))
-
-        var dirs = [[1,0], [-1,0], [0,1], [0,-1]]
-
-        for (d in dirs) {
-          var nx = x + d[0]
-          var ny = y + d[1]
-
-          queue.add([nx, ny, cost + 1])
-        }
-    }
-
-    return reachable
+  x { _x }
+  y { _y }
+  duration { _duration }
+  duration=(value) {
+    _duration = value 
   }
 }
 
@@ -82,6 +63,7 @@ class Event {
   static DESTROY_UNIT         { 3 }
   static CREATE_PROJECTILE    { 4 }
   static DESTROY_PROJECTILE   { 5 }
+  static HAZARD_APPROACHING   { 6 }
 }
 
 class Level {
@@ -92,6 +74,7 @@ class Level {
     _grid = []
     _units = []
     _projectiles = []
+    _warnings = []
 
     _unitId = 0
     _projectileId = 0
@@ -120,6 +103,8 @@ class Level {
 
   projectiles { _projectiles }
   projectiles=(value) { _projectiles = (value)}
+
+  warnings { _warnings }
 
   executeEvent(event) {
     var type = event["type"]
@@ -154,6 +139,13 @@ class Level {
       var waitTime = event["waitTime"]
       var projectileType = event["projectileType"]
       createProjectile(x, y, tx, ty, speed, waitTime, projectileType)
+    }
+
+    if (type == Event.HAZARD_APPROACHING) {
+      var x = event["x"]
+      var y = event["y"]
+      var duration = event["duration"]
+      createWarning(x,y,duration)
     }
   }
 
@@ -198,6 +190,12 @@ class Level {
       hp = 3
       speed = 0
     }
+
+    if (type == UnitType.MOUNTAIN) {
+      sprite = _sprites["main"]["mountain"]
+      hp = 3
+      speed = 0
+    }
     
     if (sprite == null) {
       sprite = _sprites["main"]["wisp"]
@@ -224,24 +222,19 @@ class Level {
     var effects = []
     var sprite = null
 
-    System.print(_sprites["bullet"]["bullet"])
-    if (type == ProjectileType.Bullet) {
-      sprite = _sprites["bullet"]["bullet"]
+    if (type == ProjectileType.BULLET) {
+      sprite = _animatedSprites["projectiles"]["bullet"]
       effects = [
         ProjectileEffect.DEAL_DAMAGE,
       ]
     }
 
-    if (type == ProjectileType.Boulder) {
-      sprite = _sprites["bullet"]["bullet"]
+    if (type == ProjectileType.BOULDER) {
+      sprite = _animatedSprites["projectiles"]["bullet"]
       effects = [
         ProjectileEffect.DEAL_DAMAGE,
         ProjectileEffect.KNOCKBACK
       ]
-    }
-
-    if (type == ProjectileType.Avalanche) {
-      // not yet implemented
     }
 
     if (sprite == null) System.print("no sprite for projectile id: %(id) ")
@@ -249,6 +242,47 @@ class Level {
     var newProjectile = Projectile.new(id, type, x, y, tx,ty, effects, speed, waitTime, sprite)
     _projectiles.add(newProjectile)
   }
+
+  createWarning(x,y,duration) {
+    var newWarning = Warning.new(x,y,duration) 
+    _warnings.add(newWarning)
+  }
+
+  isATile(x,y) {
+    for (i in 0.._grid.count-1) {
+      var tile = _grid[i]
+
+      var v = Vec2.new(x,y)
+      if (v == tile.vec2) {
+        return true
+      }      
+    }
+
+    return false
+  }
+
+  isTileBlocked(x,y) {
+    var tile = Vec2.new(x,y)
+    for (i in _units.count-1..-1) {
+      if (i == -1) break
+
+      var unit = _units[i]
+      if (unit.vec2 == tile) {
+        if (unit.type == UnitType.MC) return true
+        if (unit.type == UnitType.MOUNTAIN) return true
+      }
+    }
+
+    for (i in _projectiles.count-1..-1) {
+      if (i == -1) break
+      
+      var projectile = _projectiles[i]
+      if (projectile.vec2 == tile) return true
+    }
+  
+    return false
+  }
+
 
   isOnATile(obj) {
     for (i in 0.._grid.count-1) {
@@ -259,6 +293,45 @@ class Level {
     }
 
     return false 
+  }
+
+  getReachable(startX, startY, speed) {
+    var queue = [[startX, startY, 0]]
+    var visited = {}
+    var reachable = []
+
+    while (queue.count > 0) {
+      var node = queue.removeAt(0)
+
+      var x = node[0]
+      var y = node[1]
+      var cost = node[2]
+
+      if (cost > speed) continue
+      var key = "%(x),%(y)"
+
+      if (visited.containsKey(key) || !isATile(x,y) || (!(x == startX && y == startY) && isTileBlocked(x,y))) continue
+
+      visited[key] = true
+
+      reachable.add(Vec2.new(x, y))
+
+      var dirs = [
+        [1,0],
+        [-1,0],
+        [0,1],
+        [0,-1]
+      ]
+
+      for (d in dirs) {
+        var nx = x + d[0]
+        var ny = y + d[1]
+
+        queue.add([nx, ny, cost + 1])
+      }
+    }
+
+    return reachable
   }
 
   projectilesWaitTimeDown() {
@@ -409,7 +482,7 @@ class LevelTemplates {
                 "targetY": -1,
                 "speed": 1,
                 "waitTime": 1,
-                "projectileType": ProjectileType.Bullet
+                "projectileType": ProjectileType.BULLET
               }, 
               {
                 "type": Event.CREATE_PROJECTILE,
@@ -419,7 +492,7 @@ class LevelTemplates {
                 "targetY": 3,
                 "speed": 1,
                 "waitTime": 2,
-                "projectileType": ProjectileType.Bullet
+                "projectileType": ProjectileType.BULLET
               },
               {
                 "type": Event.CREATE_PROJECTILE,
@@ -429,7 +502,7 @@ class LevelTemplates {
                 "targetY": -1,
                 "speed": 1,
                 "waitTime": 3,
-                "projectileType": ProjectileType.Bullet
+                "projectileType": ProjectileType.BULLET
               },
             ],
           },
@@ -444,48 +517,104 @@ class LevelTemplates {
                 "x": 5,
                 "y": 1,
                 "unitType": UnitType.LANTERN,
+              },
+              {
+                "type": Event.HAZARD_APPROACHING,
+                "x": 3,
+                "y": 2,
+                "duration": 1
+              },
+              {
+                "type": Event.HAZARD_APPROACHING,
+                "x": 3,
+                "y": 1,
+                "duration": 1
+              },
+              {
+                "type": Event.HAZARD_APPROACHING,
+                "x": 3,
+                "y": 0,
+                "duration": 1
+              },
+              {
+                "type": Event.HAZARD_APPROACHING,
+                "x": 4,
+                "y": 0,
+                "duration": 1
+              },
+              {
+                "type": Event.HAZARD_APPROACHING,
+                "x": 5,
+                "y": 0,
+                "duration": 1
+              },
+              {
+                "type": Event.HAZARD_APPROACHING,
+                "x": 6,
+                "y": 0,
+                "duration": 1
+              },
+              {
+                "type": Event.HAZARD_APPROACHING,
+                "x": 7,
+                "y": 0,
+                "duration": 1
+              },
+              {
+                "type": Event.HAZARD_APPROACHING,
+                "x": 8,
+                "y": 0,
+                "duration": 1
               }
             ],
             1: [
               {
-                "type": Event.DESTROY_TILE,
+                "type": Event.CREATE_UNIT,
                 "x": 3,
                 "y": 2,
+                "unitType": UnitType.MOUNTAIN
               },
               {
-                "type": Event.DESTROY_TILE,
+                "type": Event.CREATE_UNIT,
                 "x": 3,
                 "y": 1,
+                "unitType": UnitType.MOUNTAIN
               },
               {
-                "type": Event.DESTROY_TILE,
+                "type": Event.CREATE_UNIT,
                 "x": 3,
                 "y": 0,
+                "unitType": UnitType.MOUNTAIN
               },
               {
-                "type": Event.DESTROY_TILE,
+                "type": Event.CREATE_UNIT,
                 "x": 4,
                 "y": 0,
+                "unitType": UnitType.MOUNTAIN
               },
               {
-                "type": Event.DESTROY_TILE,
+                "type": Event.CREATE_UNIT,
                 "x": 5,
                 "y": 0,
+                "unitType": UnitType.MOUNTAIN
               },
               {
-                "type": Event.DESTROY_TILE,
+                "type": Event.CREATE_UNIT,
                 "x": 6,
                 "y": 0,
+                "unitType": UnitType.MOUNTAIN
               },
               {
-                "type": Event.DESTROY_TILE,
+                "type": Event.CREATE_UNIT,
                 "x": 7,
                 "y": 0,
+                "unitType": UnitType.MOUNTAIN
               },
               {
-                "type": Event.DESTROY_TILE,
+                "type": Event.CREATE_UNIT,
                 "x": 8,
                 "y": 0,
+                "unitType": UnitType.MOUNTAIN
               }
             ],
           },
@@ -542,62 +671,32 @@ class LevelTemplates {
               {
                 "type": Event.CREATE_PROJECTILE,
                 "x": 4,
+                "y": 0,
+                "targetX": 4,
+                "targetY": 4,
+                "speed": 1,
+                "waitTime": 1,
+                "projectileType": ProjectileType.BOULDER
+              },
+              {
+                "type": Event.CREATE_PROJECTILE,
+                "x": 4,
                 "y": 5,
                 "targetX": 4,
                 "targetY": -1,
                 "speed": 1,
-                "waitTime": 1,
-                "projectileType": ProjectileType.Bullet
-              },
-              {
-                "type": Event.CREATE_PROJECTILE,
-                "x": 5,
-                "y": 3,
-                "targetX": 5,
-                "targetY": 3,
-                "speed  ": 1,
                 "waitTime": 2,
-                "projectileType": ProjectileType.Bullet
+                "projectileType": ProjectileType.BULLET
               },
               {
                 "type": Event.CREATE_PROJECTILE,
-                "x": 2,
+                "x": 3,
                 "y": 5,
-                "targetX": 2,
+                "targetX": 3,
                 "targetY": 3,
                 "speed": 1,
                 "waitTime": 3,
-                "projectileType": ProjectileType.Bullet
-              },
-              {
-                "type": Event.CREATE_PROJECTILE,
-                "x": 1,
-                "y": 5,
-                "targetX": 1,
-                "targetY": 3,
-                "speed": 1,
-                "waitTime": 3,
-                "projectileType": ProjectileType.Bullet
-              },
-              {
-                "type": Event.CREATE_PROJECTILE,
-                "x": 1,
-                "y": 3,
-                "targetX": 1,
-                "targetY": 5,
-                "speed": 1,
-                "waitTime": 4,
-                "projectileType": ProjectileType.Bullet
-              },
-              {
-                "type": Event.CREATE_PROJECTILE,
-                "x": 2,
-                "y": 3,
-                "targetX": 2,
-                "targetY": 5,
-                "speed": 1,
-                "waitTime": 4,
-                "projectileType": ProjectileType.Bullet
+                "projectileType": ProjectileType.BULLET
               },
               {
                 "type": Event.CREATE_PROJECTILE,
@@ -606,8 +705,48 @@ class LevelTemplates {
                 "targetX": 3,
                 "targetY": 5,
                 "speed": 1,
+                "waitTime": 4,
+                "projectileType": ProjectileType.BULLET
+              },
+              {
+                "type": Event.CREATE_PROJECTILE,
+                "x": 2,
+                "y": 5,
+                "targetX": 2,
+                "targetY": 3,
+                "speed": 1,
+                "waitTime": 4,
+                "projectileType": ProjectileType.BULLET
+              },
+              {
+                "type": Event.CREATE_PROJECTILE,
+                "x": 2,
+                "y": 3,
+                "targetX": 2,
+                "targetY": 5,
+                "speed": 1,
                 "waitTime": 5,
-                "projectileType": ProjectileType.Bullet
+                "projectileType": ProjectileType.BULLET
+              },
+              {
+                "type": Event.CREATE_PROJECTILE,
+                "x": 1,
+                "y": 5,
+                "targetX": 1,
+                "targetY": 3,
+                "speed": 1,
+                "waitTime": 5,
+                "projectileType": ProjectileType.BULLET
+              },
+              {
+                "type": Event.CREATE_PROJECTILE,
+                "x": 1,
+                "y": 3,
+                "targetX": 1,
+                "targetY": 5,
+                "speed": 1,
+                "waitTime": 6,
+                "projectileType": ProjectileType.BULLET
               },
             ]
           },

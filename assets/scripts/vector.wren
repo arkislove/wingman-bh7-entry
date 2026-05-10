@@ -37,6 +37,30 @@ class Vec2 {
     return current + (toVector  / dist) * maxDistanceDelta
   }
 
+  static getDirection(v1, v2) {
+    var v = v2 - v1
+
+    if (v.x == 0 && v.y == 0) {
+      return null
+    }
+
+    if (v.x >= 0 && v.y < 0) {
+      return "NE"
+    }
+
+    if (v.x < 0 && v.y <= 0) {
+      return "NW"
+    }
+
+    if (v.x > 0 && v.y >= 0) {
+      return "SE"
+    }
+
+    if (v.x <= 0 && v.y > 0) {
+      return "SW"
+    }
+  }
+
   toString { "(%(_x), %(_y))" }
 
   // determines which side of the line the point is
@@ -93,4 +117,11 @@ class Vec2 {
 
     return (d1 * d2 < 0) && (d3 * d4 < 0)
   }
+}
+
+class Direction {
+  static NW { "NW" }
+  static NE { "NE" }
+  static SW { "SW" }
+  static SE { "SE" }
 }

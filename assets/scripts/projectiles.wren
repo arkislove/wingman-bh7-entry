@@ -1,23 +1,13 @@
 import "vector" for Vec2
 
-class Direction {
-  static NW { 0 }
-  static NE { 1 }
-  static SW { 2 }
-  static SE { 3 }
-}
-
 class ProjectileType {
-  static Bullet     { 0 }
-  static Boulder    { 1 }
-  static Avalanche  { 2 }  
+  static BULLET     { 0 }
+  static BOULDER    { 1 }
 }
 
 class ProjectileEffect {
   static DEAL_DAMAGE { 0 }
   static KNOCKBACK   { 1 }
-
-
 }
 
 class Projectile {
@@ -32,6 +22,11 @@ class Projectile {
     _speed = speed
     _waitTime = waitTime
     _sprite = sprite
+    if (sprite.type == Map) {
+      _currentSprite = sprite.toList[0].value
+    } else {
+      _currentSprite = sprite
+    }
   }
 
   id { _id }
@@ -39,9 +34,12 @@ class Projectile {
   y { _y }
   tx { _tx }
   ty { _ty }
-  dmg { _dmg }
   speed { _speed }
   sprite { _sprite }
+  currentSprite { _currentSprite }
+  setSprite(value) {
+    _currentSprite = value
+  } 
 
   effects { _effects }
   
